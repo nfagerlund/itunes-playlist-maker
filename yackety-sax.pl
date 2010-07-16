@@ -25,12 +25,12 @@ package SaxTrackHandler;
 	extends 'XML::SAX::Base';
 	# But I like this better. 
 	
-	sub BUILD {
-		my $self = shift;
-		return XML::Filter::BufferText->new( Handler => $self );
-	}
+# 	sub BUILD {
+# 		my $self = shift;
+# 		return XML::Filter::BufferText->new( Handler => $self );
+# 	}
 	# Okay, let's see if that works. 
-	
+	# It does! At least in the sense that it doesn't break things. I think. We'll have to check efficacy later. 
 	
 	# has 
 	my $last_element;
@@ -38,7 +38,11 @@ package SaxTrackHandler;
 	
 	sub start_element {
 		my ($self, $element_structure) = @_;
-		say "Found a key: " . $element_structure->{'LocalName'} if $element_structure->{'LocalName'} =~ m/key/;
+		if  (defined $last_element && $last_element =~ /key/) {
+			say "This value is a " . $element_structure->{'LocalName'} . "!";
+		}
+		
+		$last_element = $element_structure->{'LocalName'};
 	}
 	
 # 	sub end_element {
