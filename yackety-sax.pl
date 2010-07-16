@@ -49,9 +49,10 @@ package SaxTrackHandler;
 # 		my ($self, $element_structure) = @_;
 # 	}
 # 	
-# 	sub characters {
-# 	
-# 	}
+	sub characters {
+		my ($self, $data_hashref) = @_;
+		say $data_hashref->{'Data'};
+	}
 # 	
 # 	
 	
