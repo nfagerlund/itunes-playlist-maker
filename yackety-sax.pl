@@ -10,14 +10,14 @@ use XML::SAX;
 # use SaxTrackHandler; HURF DURF, not needed. 
 
 my %ArtistAlbums;
-my %Compilations
+my %Compilations;
 
-my $parser = XML::SAX::ParserFactory->parser( Handler => SaxTrackHandler->new( ArtistAlbumsShelf => \%ArtistAlbums, CompilationsShelf => \%Compilations) );
+my $parser = XML::SAX::ParserFactory->parser( Handler => SaxTrackHandler->new(ArtistAlbumsShelf => \%ArtistAlbums, CompilationsShelf => \%Compilations));
 $parser->parse_uri("/Users/nick/Desktop/complete albums/testdata.xml");
 
 # And now some testing code:
 say %Compilations->mo->perl;
-say "Okay, and now the artist albums: "
+say "Okay, and now the artist albums: ";
 say %ArtistAlbums->mo->perl;
 
 package SaxTrackHandler;
@@ -28,8 +28,8 @@ package SaxTrackHandler;
 	use XML::SAX::Base;
 	use Moose;
 # 	use XML::Filter::BufferText;
-# 	extends qw( XML::SAX::Base Moose::Object ); This MIGHT be necessary? 
-	extends 'XML::SAX::Base';
+	extends qw( Moose::Object XML::SAX::Base ); # This MIGHT be necessary? 
+# 	extends 'XML::SAX::Base';
 	# But I like this better because I distrust multi-parent households. We'll have to introspect later and see if my fave version actually works. 
 	
 # 	sub BUILD {
@@ -113,13 +113,13 @@ package SaxTrackHandler;
 				
 				if ($just_finished_dict =~ /\d+/ and $dict_state[-1] eq 'Tracks') {
 					return unless ( $current_track_record{'Album'} and $current_track_record{'Track Count'} and $current_track_record{'Track Count'} );
-					$ArtistAlbumsShelf->{ $current_track_record->{'Artist'} } ||= {};
+					$ArtistAlbumsShelf->{ $current_track_record{'Artist'} } ||= {};
 					my $shelf = 
-						($current_track_record->{'Compilation'} ? $CompilationsShelf : $ArtistAlbumsShelf->{ $current_track_record->{'Artist'} };
-					my $album = $shelf->{ $current_track_record->{'Album'} };
-					$album->{tracks_array}[ $current_track_record->{'Track Number'} - 1 ] = 1;
-					$album->{total_tracks} //= $current_track_record->{'Track Count'}; #/
-					$album->{length_in_milliseconds} += $current_track_record->{'Total Time'};
+						($current_track_record{'Compilation'} ? $CompilationsShelf : $ArtistAlbumsShelf->{ $current_track_record{'Artist'} });
+					my $album = $shelf->{ $current_track_record{'Album'} };
+					$album->{tracks_array}[ $current_track_record{'Track Number'} - 1 ] = 1;
+					$album->{total_tracks} //= $current_track_record{'Track Count'}; #/
+					$album->{length_in_milliseconds} += $current_track_record{'Total Time'};
 					
 				}
 			}
