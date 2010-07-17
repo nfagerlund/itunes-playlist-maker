@@ -19,6 +19,7 @@ package SaxTrackHandler;
 
 
 # 	use perl5i::2; Uh, not for now? Let's try that again. 
+	use Modern::Perl;
 	use XML::SAX::Base;
 	use Moose;
 # 	use XML::Filter::BufferText;
@@ -37,6 +38,7 @@ package SaxTrackHandler;
 	my $current_element;
 	my $current_key;
 	my @dict_state; # Push key names onto me when we enter a dict. Once we pop Tracks, we can kill the whole project. Maybe. If it's possible. 
+	my %current_track_record; 
 	
 # 	has 'ArtistAlbumsShelf', is => 'ro', isa => 'HashRef';
 # 	has 'CompilationsShelf', is => 'ro', isa => 'HashRef';
@@ -48,15 +50,19 @@ package SaxTrackHandler;
 		my ($self, $element_structure) = @_;
 		$current_element = $element_structure->{'LocalName'};
 		given ($current_element) {
-			when (/key/) {
+			when ('key') {
 				$current_key = '';
 				
 				
-				return;
 				
 			}
-			when (/dict/) {
-				
+			when ('dict') {
+				if ($last_element eq 'plist') {
+					push(@dict_state, 'plist');
+				}
+				else {
+					push(@dict_state, $current_key);
+				}
 			}
 			
 			default {
@@ -78,7 +84,16 @@ package SaxTrackHandler;
 	sub characters {
 		my ($self, $data_hashref) = @_;
 		# say $data_hashref->{'Data'};
-		$current_key = $data_hashref->{'Data'} if $current_element eq "key";
+		given ($current_element) {
+			when ('key') {
+				$current_key = $data_hashref->{'Data'};
+			}
+			when ('dict') { return; }
+			default {
+				return unless $dict_state[1] eq 'Tracks';
+				$current_track_record{$current_key} = $data_hashref->{'Data'};
+			}
+		}
 		
 		
 	}
@@ -86,10 +101,17 @@ package SaxTrackHandler;
 	
 	sub end_element {
 		my ($self, $element_structure) = @_;
-		
-		
 		$last_element = $element_structure->{'LocalName'};
 		undef $current_element;
+		
+		given ($last_element) {
+			when ('dict') {
+				my $just_finished_dict = pop(@dict_state);
+				# If $just_finished_dict eq 'Tracks', we fuckin' bail, except I don't know how to do that yet. 
+				# Else (i.e. $just_finished_dict =~ /\d+/ and $dict_state[-1] eq 'Tracks'), we have a complete track record! Check for sanity per the old meatpacking loop, and put it on the shelf if it passes. Finally, set %current_track_record = ().
+			}
+		}
+		
 	}
 	
 # 	
