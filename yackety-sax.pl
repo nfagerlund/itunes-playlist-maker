@@ -20,10 +20,10 @@ package SaxTrackHandler;
 # 	use perl5i::2; Uh, not for now? Let's try that again. 
 	use XML::SAX::Base;
 	use Moose;
-	use XML::Filter::BufferText;
+# 	use XML::Filter::BufferText;
 # 	extends qw( XML::SAX::Base Moose::Object ); This MIGHT be necessary? 
 	extends 'XML::SAX::Base';
-	# But I like this better. 
+	# But I like this better because I distrust multi-parent households. We'll have to introspect later and see if my fave version actually works. 
 	
 # 	sub BUILD {
 # 		my $self = shift;
@@ -34,24 +34,37 @@ package SaxTrackHandler;
 	
 	# has 
 	my $last_element;
-	
+	my $current_element;
+	my $current_key;
+	my @dict_state; # Push key names onto me when we enter a dict. Once we pop Tracks, we can kill the whole project. Maybe. If it's possible. 
+
 	
 	sub start_element {
 		my ($self, $element_structure) = @_;
 		if  (defined $last_element && $last_element =~ /key/) {
-			say "This value is a " . $element_structure->{'LocalName'} . "!";
+			# say "This value is a " . $element_structure->{'LocalName'} . "!";
+			
+			
 		}
 		
-		$last_element = $element_structure->{'LocalName'};
+		$current_element = $element_structure->{'LocalName'};
+		
 	}
 	
-# 	sub end_element {
-# 		my ($self, $element_structure) = @_;
-# 	}
-# 	
+	sub end_element {
+		my ($self, $element_structure) = @_;
+		
+		
+		$last_element = $element_structure->{'LocalName'};
+		undef $current_element;
+	}
+	
 	sub characters {
 		my ($self, $data_hashref) = @_;
-		say $data_hashref->{'Data'};
+		# say $data_hashref->{'Data'};
+		$current_key = $data_hashref->{'Data'} if $current_element eq "key";
+		
+		
 	}
 # 	
 # 	
