@@ -9,11 +9,16 @@ use Modern::Perl;
 use XML::SAX;
 # use SaxTrackHandler; HURF DURF, not needed. 
 
+my %ArtistAlbums;
+my %Compilations
 
-
-my $parser = XML::SAX::ParserFactory->parser( Handler => SaxTrackHandler->new() );
+my $parser = XML::SAX::ParserFactory->parser( Handler => SaxTrackHandler->new( ArtistAlbumsShelf => \%ArtistAlbums, CompilationsShelf => \%Compilations) );
 $parser->parse_uri("/Users/nick/Desktop/complete albums/testdata.xml");
 
+# And now some testing code:
+say %Compilations->mo->perl;
+say "Okay, and now the artist albums: "
+say %ArtistAlbums->mo->perl;
 
 package SaxTrackHandler;
 
@@ -39,6 +44,8 @@ package SaxTrackHandler;
 	my $current_key = '';
 	my @dict_state = (); # Push key names onto me when we enter a dict. Once we pop Tracks, we can kill the whole project. Maybe. If it's possible. 
 	my %current_track_record = (); 
+	
+	# Is all the above scoped to the specific object instance? I can't tell! Ask Schwern. 
 	
 	has 'ArtistAlbumsShelf', is => 'ro', isa => 'HashRef';
 	has 'CompilationsShelf', is => 'ro', isa => 'HashRef';
@@ -74,7 +81,7 @@ package SaxTrackHandler;
 				$current_key = $data_hashref->{'Data'};
 			}
 			when ('dict') { 
-				return; # Because I think there's a bunch of whitespace I'd like to avoid trying to call a hash ref on. 
+				return; # Because I think there's a bunch of whitespace I'd like to avoid trying to do a hash lookup on. 
 			}
 			default {
 				return unless $dict_state[1] eq 'Tracks';
@@ -104,8 +111,15 @@ package SaxTrackHandler;
 				# If $just_finished_dict eq 'Tracks', we fuckin' bail, except I don't know how to do that yet. 
 				# Else (i.e. $just_finished_dict =~ /\d+/ and $dict_state[-1] eq 'Tracks'), we have a complete track record! Check for sanity per the old meatpacking loop, and put it on the shelf if it passes. Finally, set %current_track_record = ().
 				
-				if ($just_finished_dict =~ /\d+/ and $dict_state[-1] eq 'Tracks' {
+				if ($just_finished_dict =~ /\d+/ and $dict_state[-1] eq 'Tracks') {
 					return unless ( $current_track_record{'Album'} and $current_track_record{'Track Count'} and $current_track_record{'Track Count'} );
+					$ArtistAlbumsShelf->{ $current_track_record->{'Artist'} } ||= {};
+					my $shelf = 
+						($current_track_record->{'Compilation'} ? $CompilationsShelf : $ArtistAlbumsShelf->{ $current_track_record->{'Artist'} };
+					my $album = $shelf->{ $current_track_record->{'Album'} };
+					$album->{tracks_array}[ $current_track_record->{'Track Number'} - 1 ] = 1;
+					$album->{total_tracks} //= $current_track_record->{'Track Count'}; #/
+					$album->{length_in_milliseconds} += $current_track_record->{'Total Time'};
 					
 				}
 			}
