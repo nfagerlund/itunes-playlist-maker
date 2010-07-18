@@ -30,11 +30,12 @@ say %ArtistAlbums->mo->perl;
 
 
 
-
+BEGIN {
 package SaxTrackHandler;
 #	use Modern::Perl;
 	use perl5i::2;
 	use Moose;
+	use MooseX::NonMoose;
 	BEGIN { extends 'XML::SAX::Base'; }
 
 # 	use XML::Filter::BufferText;
@@ -60,9 +61,7 @@ package SaxTrackHandler;
 	
 	sub start_element {
 		my ($self, $element_structure) = @_;
-		$self->current_element(
-			$element_structure->{'LocalName'}
-		);
+		$self->current_element( $element_structure->{'LocalName'} );
 		if ($self->current_element eq 'dict') {
 			if ($self->last_element eq 'plist') {
 				$self->dict_state->push('plist');
@@ -119,10 +118,10 @@ package SaxTrackHandler;
 				
 				if ($just_finished_dict =~ /\d+/ and $self->dict_state->[-1] eq 'Tracks') {
 					return unless ( $self->active_track_record->{'Album'} and $self->active_track_record->{'Track Count'} and $self->active_track_record->{'Track Number'} );
-					$self->ArtistAlbumsShelf->{ $self->active_track_record{'Artist'} } ||= {};
+					$self->ArtistAlbumsShelf->{ $self->active_track_record->{'Artist'} } ||= {};
 					my $temp_shelf = ($self->active_track_record->{'Compilation'} ? 
 						$self->CompilationsShelf : 
-						$self->ArtistAlbumsShelf->{ $active_track_record{'Artist'} }
+						$self->ArtistAlbumsShelf->{ $self->active_track_record->{'Artist'} }
 					);
 					my $album = $temp_shelf->{ $self->active_track_record->{'Album'} };
 					$album->{tracks_array}[ $self->active_track_record->{'Track Number'} - 1 ] = 1;
@@ -135,8 +134,4 @@ package SaxTrackHandler;
 		
 	}
 	
-# 	
-# 	
-	
-	
-
+}
