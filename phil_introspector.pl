@@ -8,6 +8,8 @@ use perl5i::2;
 use Modern::Perl;
 use XML::SAX;
 # use SaxTrackHandler; HURF DURF, not needed. 
+use Data::Dumper;
+
 
 my %ArtistAlbums;
 my %Compilations;
@@ -19,20 +21,25 @@ my $handler = SaxTrackHandler->new(ArtistAlbumsShelf => \%ArtistAlbums, Compilat
 
 my $metainstance = $handler->meta();
 my $metaclass = SaxTrackHandler->meta();
-say "attributes: ";
-say $metainstance->superclasses();
+# say $metainstance->class_precedence_list;
+# say $handler->isa('XML::SAX::Base');
+print Dumper \@SaxTrackHandler::ISA;
 
 package SaxTrackHandler;
 
+	use Modern::Perl;
+	use Moose;
+	use MooseX::NonMoose;
+# 	use MooseX::InsideOut;
+# 	use XML::SAX::Base; #I  think I cane leave that off if I'm using NonMoose? 
+	BEGIN {extends 'XML::SAX::Base';}
+# 	extends qw( Moose::Object XML::SAX::Base ); 
 
 # 	use perl5i::2; Uh, not for now? Let's try that again. 
-	use Modern::Perl;
-	use XML::SAX::Base;
-	use Moose;
 # 	use XML::Filter::BufferText;
-	extends qw( Moose::Object XML::SAX::Base ); # This MIGHT be necessary? 
-# 	extends 'XML::SAX::Base';
 	# But I like this better because I distrust multi-parent households. We'll have to introspect later and see if my fave version actually works. 
+
+
 	
 	
 	my $last_element = '';
