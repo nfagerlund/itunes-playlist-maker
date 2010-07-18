@@ -7,67 +7,21 @@
 use perl5i::2;
 use Modern::Perl;
 use XML::SAX;
-# use SaxTrackHandler; HURF DURF, not needed. 
+use SaxTrackHandlerStub; # HURF DURF, not needed. except now it is!
 use Data::Dumper;
 
 
 my %ArtistAlbums;
 my %Compilations;
 
-# my $parser = XML::SAX::ParserFactory->parser( Handler => SaxTrackHandler->new(ArtistAlbumsShelf => \%ArtistAlbums, CompilationsShelf => \%Compilations));
+# my $parser = XML::SAX::ParserFactory->parser( Handler => SaxTrackHandlerStub->new(ArtistAlbumsShelf => \%ArtistAlbums, CompilationsShelf => \%Compilations));
 
-my $handler = SaxTrackHandler->new(ArtistAlbumsShelf => \%ArtistAlbums, CompilationsShelf => \%Compilations);
+my $handler = SaxTrackHandlerStub->new(ArtistAlbumsShelf => \%ArtistAlbums, CompilationsShelf => \%Compilations);
 
 
 my $metainstance = $handler->meta();
-my $metaclass = SaxTrackHandler->meta();
+my $metaclass = SaxTrackHandlerStub->meta();
 # say $metainstance->class_precedence_list;
 # say $handler->isa('XML::SAX::Base');
-print Dumper \@SaxTrackHandler::ISA;
-
-package SaxTrackHandler;
-
-	use Modern::Perl;
-	use Moose;
-	use MooseX::NonMoose;
-# 	use MooseX::InsideOut;
-# 	use XML::SAX::Base; #I  think I cane leave that off if I'm using NonMoose? 
-	BEGIN {extends 'XML::SAX::Base';}
-# 	extends qw( Moose::Object XML::SAX::Base ); 
-
-# 	use perl5i::2; Uh, not for now? Let's try that again. 
-# 	use XML::Filter::BufferText;
-	# But I like this better because I distrust multi-parent households. We'll have to introspect later and see if my fave version actually works. 
-
-
-	
-	
-	my $last_element = '';
-	my $current_element = '';
-	my $current_key = '';
-	my @dict_state = (); # Push key names onto me when we enter a dict. Once we pop Tracks, we can kill the whole project. Maybe. If it's possible. 
-	my %current_track_record = (); 
-	
-	# Is all the above scoped to the specific object instance? I can't tell! Ask Schwern. 
-	
-	has 'ArtistAlbumsShelf', is => 'ro', isa => 'HashRef';
-	has 'CompilationsShelf', is => 'ro', isa => 'HashRef';
-	
-	sub start_element {
-	}
-		
-		
-
-	
-	
-	sub characters {
-	}
-	
-	
-	sub end_element {}
-	
-# 	
-# 	
-	
-	
+print Dumper \@SaxTrackHandlerStub::ISA;
 
