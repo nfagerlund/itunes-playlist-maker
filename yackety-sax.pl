@@ -36,7 +36,8 @@ package SaxTrackHandler;
 	use perl5i::2;
 	use Moose;
 	use MooseX::NonMoose;
-	BEGIN { extends 'XML::SAX::Base'; }
+	extends 'XML::SAX::Base';
+#	BEGIN { extends 'XML::SAX::Base'; }
 
 # 	use XML::Filter::BufferText;
 # 	sub BUILD {
@@ -52,11 +53,11 @@ package SaxTrackHandler;
 	has 'CompilationsShelf' => (is => 'ro', isa => 'HashRef');
 	
 	# PRIVATE ATTRIBUTES:
-	has last_element => ( is => 'rw', default => '', init_arg => undef );
-	has current_element => ( is => 'rw', default => '', init_arg => undef );
-	has current_key => ( is => 'rw', default => '', init_arg => undef );
-	has dict_state => ( is => 'rw', default => sub{ [] }, isa => 'ArrayRef', init_arg => undef );
-	has active_track_record => ( is => 'rw', default => sub{ {} }, isa => 'HashRef', init_arg => undef );
+	has 'last_element' => ( is => 'rw', default => '', init_arg => undef );
+	has 'current_element' => ( is => 'rw', default => '', init_arg => undef );
+	has 'current_key' => ( is => 'rw', default => '', init_arg => undef );
+	has 'dict_state' => ( is => 'rw', default => sub{ [] }, isa => 'ArrayRef', init_arg => undef );
+	has 'active_track_record' => ( is => 'rw', default => sub{ {} }, isa => 'HashRef', init_arg => undef );
 	
 	
 	sub start_element {
@@ -89,7 +90,7 @@ package SaxTrackHandler;
 				return; # Because I think there's a bunch of whitespace I'd like to avoid trying to do a hash lookup on. 
 			}
 			default {
-				return unless $self->dict_state->[1] eq 'Tracks';
+				return unless (defined $self->dict_state->[1] and $self->dict_state->[1] eq 'Tracks');
 				$self->active_track_record->{$self->current_key} = $data_hashref->{'Data'};
 			}
 		}
@@ -124,7 +125,7 @@ package SaxTrackHandler;
 						$self->ArtistAlbumsShelf->{ $self->active_track_record->{'Artist'} }
 					);
 					my $album = $temp_shelf->{ $self->active_track_record->{'Album'} };
-					$album->{tracks_array}[ $self->active_track_record->{'Track Number'} - 1 ] = 1;
+					$album->{tracks_array}[$self->active_track_record->{'Track Number'} - 1] = 1;
 					$album->{total_tracks} = $self->active_track_record->{'Track Count'}; 
 					$album->{length_in_milliseconds} += $self->active_track_record->{'Total Time'};
 					
@@ -133,5 +134,7 @@ package SaxTrackHandler;
 		}
 		
 	}
+	1;
+	
 	
 }
