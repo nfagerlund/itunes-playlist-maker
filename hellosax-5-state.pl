@@ -19,7 +19,7 @@ use perl5i::2;
 
 my $elementcount = 0;
 my $integercount = 0; 
-my @elementstack;
+my @elementstack = ('test', 'item', 'fake');
 
 sub start_element {
     my ($self, $element_structure) = @_;
@@ -32,10 +32,13 @@ sub end_element {}
 
 sub characters {
     my ($self, $characters_structure) = @_;
-    @elementstack->push("extra-fakey");
-    my $obvioustempvar = join(', ', @elementstack);
-    say "fakie" . $integercount . $elementstack[1] if $characters_structure->{'Data'} eq 'Brighter Days';
-    # this works, but I can't get $elementstack[0] to work here.
+    if ($characters_structure->{'Data'} eq 'Brighter Days')
+    {
+        @elementstack->push("extra-fakey");
+        my $obvioustempvar = join(', ', @elementstack);
+        say "fakie" . $integercount . $elementstack[0] ;
+        # This totally acts like I never assigned anything to the array up there! But if I try to not declare it in the scope above, I get a compilation error! So wtf? 
+    }
 }
 
 sub end_document {
