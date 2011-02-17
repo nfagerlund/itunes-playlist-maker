@@ -19,7 +19,7 @@ use modern::perl;
 
 my $elementcount = 0;
 my $integercount = 0; 
-my @elementstack = ();
+my @elementstack = qw(item one two three);
 
 sub start_element {
     my ($self, $element_structure) = @_;
@@ -32,7 +32,9 @@ sub end_element {}
 
 sub characters {
     my ($self, $characters_structure) = @_;
-    say "some nonsense" if $characters_structure->{'Data'} eq 'Brighter Days';
+    my $obvioustempvar = join(', ', @elementstack);
+    say "fakie" . $integercount if $characters_structure->{'Data'} eq 'Brighter Days';
+    # this works, but I can't get $elementstack[0] to work here.
 }
 
 sub end_document {
