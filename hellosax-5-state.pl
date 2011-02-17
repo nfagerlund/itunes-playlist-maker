@@ -18,7 +18,7 @@ use perl5i::2;
 # use modern::perl;
 
 my $elementcount = 0;
-my $integercount = 0; 
+my $integercount = 100; 
 my @elementstack;
 $elementstack[0] = 'test';
 $elementstack[1] = 'item';
