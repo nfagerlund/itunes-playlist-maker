@@ -19,7 +19,10 @@ use perl5i::2;
 
 my $elementcount = 0;
 my $integercount = 0; 
-my @elementstack = ('test', 'item', 'fake');
+my @elementstack;
+$elementstack[0] = 'test';
+$elementstack[1] = 'item';
+$elementstack[2] = 'fake';
 
 sub start_element {
     my ($self, $element_structure) = @_;
