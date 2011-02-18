@@ -47,16 +47,17 @@ my %albums;
 
 sub write_track {
     my ($self, $track) = @_;
-    return unless # Get metrics. Most common goes on top.
-        exists($track->{Track Count}) && 
-        exists($track->{Track Number}) &&
+    return unless (# Get metrics. Most common goes on top.
+        exists($track->{'Track Count'}) && 
+        exists($track->{'Track Number'}) &&
         exists($track->{Album}) &&
-        exists($track->{Artist};
+        exists($track->{Artist})
+    );
     my $artist_or_comp = $track->{Compilation} || $track->{Artist};
     my $album_ID;
-    if ( exists($track->{Disc Number}) ) 
+    if ( exists($track->{'Disc Number'}) ) 
     {
-        $album_ID = $artist_or_comp . '_' . $track->{Album} . '_' . $track->{Disc Number};
+        $album_ID = $artist_or_comp . '_' . $track->{Album} . '_' . $track->{'Disc Number'};
     }
     else
     {
@@ -68,8 +69,8 @@ sub write_track {
         $albums{$album_ID}{$attribute} = $track->{$attribute} || 0;
     }
     # Then the more complicated ones
-    $albums{$album_ID}{Total Time} += $track->{Total Time};
-    $albums{$album_ID}{tracks_seen}[$track->{Track Number} - 1] = 1;
+    $albums{$album_ID}{'Total Time'} += $track->{'Total Time'};
+    $albums{$album_ID}{tracks_seen}[$track->{'Track Number'} - 1] = 1;
     # And... that should be it. 
 }
 
@@ -88,6 +89,7 @@ sub start_element {
             type => $element_structure->{'LocalName'} 
             }
         );
+        $inside_track = 1 if $inside_tracks_dict == 1 and $inside_track == 0 and $key_stack[0] ne 'Tracks';
     }
 }
 
@@ -97,21 +99,31 @@ sub end_element {
     @element_stack->shift;
     
     # Shift from @data_structure_stack
-    if ($element_structure->{'LocalName'} eq 'plist') {}
+    if ($element_structure->{'LocalName'} eq 'plist') {return;}
     else if ($element_structure->{'LocalName'} eq 'dict' || 'array')
     {
-        @key_stack->shift if 
+        my $exit_key
+        $exit_key = @key_stack->shift if (
             ($data_structure_stack[1]->{type} eq 'dict') and 
-            ($key_stack[0] eq $data_structure_stack[0]->{name});
+            ($key_stack[0] eq $data_structure_stack[0]->{name})
+        );
         @data_structure_stack->shift;
+        $inside_tracks_dict = -1 if $exit_key eq 'Tracks';
+        if ($inside_track == 1)
+        {
+            $inside_track = 0;
+            $self->write_track(\%current_track);
+            %current_track = ();
+        }
     }
     else if ( 
         ($element_structure->{'LocalName'} ne 'key') and 
         ($data_structure_stack[0]->{type} eq 'dict')
-    )
+    ) # i.e. it's a regular value from a key/value pair, but we already consumed it back in the characters event.
     {
         @key_stack->shift;
     }
+    else {say "Something be happening.";} # I don't know what exactly would land here. 
     
 
 }
@@ -123,10 +135,23 @@ sub characters {
     if ($element_stack[0] eq 'key')
     {
         @key_stack->unshift($characters_structure->{'Data'});
+        $inside_tracks_dict = 1 if $characters_structure->{'Data'} eq 'Tracks';
+    }
+    else if ($inside_track == 1) # Wow, better pray.
+    {
+        $current_track{$key_stack[0]} = $characters_structure->{'Data'};
     }
 }
 
-sub start_document{
+sub start_document {
+    @element_stack = ();
+    $inside_tracks_dict = 0;
+    $inside_track = 0;
+    @key_stack = ();
+    @data_structure_stack = ();
+    %current_track = ();
+    %albums = ();
+    
 }
 
 sub end_document {
