@@ -33,6 +33,10 @@ sub start_element {
 
 sub end_element {}
 
+sub start_document{
+    @elementstack->push("less-fakey");
+}
+
 sub characters {
     my ($self, $characters_structure) = @_;
     if ($characters_structure->{'Data'} eq 'Brighter Days')
@@ -48,6 +52,7 @@ sub end_document {
     my $outputstring = $elementcount . " elements total and " . $integercount . " integers. Yay.";
     return $outputstring;
     # This still works. 
+    # Oh, remember to check: can I return an arrayref or hashref?
 }
 
 1;
