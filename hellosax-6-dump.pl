@@ -8,9 +8,9 @@ my $parser = XML::SAX::ParserFactory->parser(
     Handler => $handler
 );
 
-my $a_number = $parser->parse_uri("/Users/nick/Documents/Code/complete albums/testdata.xml");
+my $a_hashref = $parser->parse_uri("/Users/nick/Documents/Code/complete albums/testdata.xml");
 
-say $a_number;
+say $a_hashref->keys->join(', ');
 
 package TestSAXHandler;
 use base qw(XML::SAX::Base);
@@ -43,10 +43,9 @@ sub characters {
 }
 
 sub end_document {
-    my $outputstring = %keys_seen->keys->join(", ");
-    return $outputstring;
-    # This still works. 
-    # Oh, remember to check: can I return an arrayref or hashref?
+#     my $outputstring = %keys_seen->keys->join(", ");
+#     return $outputstring;
+    return \%keys_seen;
 }
 
 1;
