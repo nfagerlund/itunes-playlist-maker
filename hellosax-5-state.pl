@@ -33,6 +33,9 @@ sub start_element {
 
 sub end_element {}
 
+sub pee_on_bush {
+    say @elementstack->join(', ');
+}
 sub start_document{
     @elementstack->push("less-fakey");
 }
@@ -42,8 +45,9 @@ sub characters {
     if ($characters_structure->{'Data'} eq 'Brighter Days')
     {
         @elementstack->push("extra-fakey");
-        my $obvioustempvar = join(', ', @elementstack);
-        say "fakie" . $integercount . $elementstack[0] ;
+        $self->pee_on_bush;
+        # my $obvioustempvar = join(', ', @elementstack);
+        # say "fakie" . $integercount . $elementstack[0] ;
         # This totally acts like I never assigned anything to the array up there! But if I try to not declare it in the scope above, I get a compilation error! So wtf? 
     }
 }
