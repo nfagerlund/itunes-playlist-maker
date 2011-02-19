@@ -55,7 +55,7 @@ sub end_element {
     my $localname = $element_structure->{LocalName};
     @element_stack->shift;
     
-    if ($data_structure_stack[0]->{type} eq 'dict' and $localname ne 'key')
+    if ($self->in_a_dict and $localname ne 'key')
     {
         # Then we must have just finished reading a value, and have exited a key/val pair. 
         @key_stack->shift;
@@ -73,7 +73,7 @@ sub characters {
     my $data = $characters_structure->{Data};
     
     
-    if ($data_structure_stack[0]->{type} eq 'dict') # then it's a key or a value.
+    if ($self->in_a_dict) # then it's a key or a value.
     {
         if ($element_stack[0] eq 'key')
         {  
@@ -89,10 +89,21 @@ sub characters {
     }
 }
 
+sub in_a_dict {
+    my ($self) = @_;
+    if (
+        (@data_structure_stack)
+        and
+        $data_structure_stack[0]->{type} eq 'dict'
+    )
+    {  return 1;  }
+    else {  return 0;  }
+}
+
 sub start_document {
     @element_stack = ();
     @key_stack = ();
-    @data_structure_stack = ( {name => '', type => ''} );
+    @data_structure_stack = ();
     $inside_tracks_dict = 0;
     $inside_some_track = 0;
 #     %current_track = ();
