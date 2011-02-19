@@ -10,8 +10,13 @@ my $parser = XML::SAX::ParserFactory->parser(
     Handler => $handler
 );
 
+my $system_reported_itunes_XML = `defaults read com.apple.iApps iTunesRecentDatabasePaths`; # This trick courtesy Doug's iTunes Applescripts, basically. 
+$system_reported_itunes_XML =~ s/\(\s*"(.+\.xml)"\s*\)/$1/s;
+$system_reported_itunes_XML =~ s/^~/$ENV{HOME}/; 
+my $itunes_XML = ($ARGV[0] ? shift : $system_reported_itunes_XML);
 
-my $albums_hashref = $parser->parse_uri("/Users/nick/Documents/Code/complete albums/testdata.xml");
+
+my $albums_hashref = $parser->parse_uri($itunes_XML);
 
 say $albums_hashref->mo->perl;
 
