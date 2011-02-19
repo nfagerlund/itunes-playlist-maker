@@ -76,11 +76,15 @@ sub characters {
     if ($data_structure_stack[0]->{type} eq 'dict') # then it's a key or a value.
     {
         if ($element_stack[0] eq 'key')
-        {  @key_stack->unshift($data);  }
-        else 
+        {  
+            @key_stack->unshift($data);
+            say $data if $data eq 'Tracks';
+        }
+        elsif (!defined($key_stack[0]))
+        {  say $data;  }        
+        else
         {
-            my $key = $key_stack[0];
-            @track_names->push($data) if $key eq 'Name';
+            @track_names->push($data) if $key_stack[0] eq 'Name';
         }
     }
 }
@@ -88,7 +92,7 @@ sub characters {
 sub start_document {
     @element_stack = ();
     @key_stack = ();
-    @data_structure_stack = ();
+    @data_structure_stack = ( {name => '', type => ''} );
     $inside_tracks_dict = 0;
     $inside_some_track = 0;
 #     %current_track = ();
