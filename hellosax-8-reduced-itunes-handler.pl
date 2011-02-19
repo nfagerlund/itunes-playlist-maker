@@ -56,6 +56,7 @@ my @track_names;
 
 sub start_element {
     my ($self, $element_structure) = @_;
+    return if $inside_tracks_dict == -1;
     my $localname = $element_structure->{LocalName};
     @element_stack->unshift($localname);
     
@@ -76,6 +77,7 @@ sub start_element {
 
 sub end_element {
     my ($self, $element_structure) = @_;
+    return if $inside_tracks_dict == -1;
     my $localname = $element_structure->{LocalName};
     
     given ($localname)
@@ -94,6 +96,7 @@ sub end_element {
 
 sub characters {
     my ($self, $characters_structure) = @_;
+    return if $inside_tracks_dict == -1;
     my $data = $characters_structure->{Data};
     
     
