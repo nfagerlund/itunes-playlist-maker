@@ -91,18 +91,13 @@ sub characters {
             @key_stack->unshift($data);
             say $data if $data eq 'Tracks'; # test code
         }
-        elsif (!defined($key_stack[0]))
-        {  say $data;  }     # test code    
         elsif ($inside_some_track and $element_stack[0] ne 'dict')
         {
-            # $current_track{$key_stack[0]} = $data;
-            # say $current_track{$key_stack[0]}->chop; # test code
-            say $data;
+            $current_track{$key_stack[0]} = $data;
+            # say $current_track{$key_stack[0]}; # test code
+            # say $data;
         }
-        else
-        {
-            @track_names->push($data) if $key_stack[0] eq 'Name';
-        }
+        # else we don't care.
     }
 }
 
