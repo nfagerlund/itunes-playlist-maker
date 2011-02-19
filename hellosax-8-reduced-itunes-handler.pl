@@ -2,6 +2,8 @@
 use XML::SAX;
 use perl5i::2;
 
+$XML::SAX::ParserPackage = "XML::SAX::ExpatXS";
+# Oh HOLY FUCK that was fast. 
 
 my $handler = TestSAXHandler->new();
 my $parser = XML::SAX::ParserFactory->parser(
