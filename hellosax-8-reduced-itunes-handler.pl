@@ -187,7 +187,7 @@ sub write_track {
         exists($track->{Album}) &&
         exists($track->{Artist})
     );
-    my $artist_or_comp = $track->{Compilation} || $track->{Artist};
+    my $artist_or_comp = $track->{Compilation} ? 'Compilation' : $track->{Artist};
     my $album_ID;
     if ( exists($track->{'Disc Number'}) ) 
     {
