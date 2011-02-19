@@ -92,7 +92,7 @@ sub characters {
         if ($element_stack[0] eq 'key')
         {  
             @key_stack->unshift($data);
-            say $data if $data eq 'Tracks'; # test code
+            # say $data if $data eq 'Tracks'; # test code
         }
         elsif ($inside_some_track and $element_stack[0] ne 'dict')
         {
@@ -137,7 +137,7 @@ sub enter_dict {
         {
             # The keys for tracks will all be \d+, but I think we can ignore that.
             $inside_some_track = 1;
-            say "Entering track " . $key_stack[0]; # test code
+            # say "Entering track " . $key_stack[0]; # test code
         }
         elsif ($key_stack[0] eq 'Tracks')
         {
@@ -171,6 +171,7 @@ sub exit_dict_or_array {
         else { $inside_some_track = 0; 
             # say "Leaving track " . $erstwhile_structure->{name}; # test code
             $self->write_track(\%current_track);
+            %current_track = ();
         }
     }
 }
