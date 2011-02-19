@@ -53,10 +53,13 @@ sub start_element {
     {
         when (/dict/) { $self->enter_dict; }
         when (/array/) { $self->enter_array; }
-        when (/(true|false)/) { 
-            # do something, because we won't get a characters event. 
-            # And I think it'll always be a value to a key. Can't see any reason to have an anonymous bool. 
-            say "found a bool $_"; # test code
+        when (/true/) { 
+            # I think it'll always be a value to a key. Can't see any reason to have an anonymous bool. 
+            $current_track{$key_stack[0]} = 1 if ($inside_some_track);
+            # say $key_stack[0] . ' ' . $current_track{$key_stack[0]}; # test code
+        }
+        when (/false/) {
+            $current_track{$key_stack[0]} = 0 if ($inside_some_track);
         }
     }
 }
@@ -166,9 +169,40 @@ sub exit_dict_or_array {
     {
         if ($erstwhile_structure->{name} eq 'Tracks') { $inside_tracks_dict = -1; }
         else { $inside_some_track = 0; 
-            say "Leaving track " . $erstwhile_structure->{name}; # test code
+            # say "Leaving track " . $erstwhile_structure->{name}; # test code
+            $self->write_track(\%current_track);
         }
     }
+}
+
+sub write_track {
+    my ($self, $track) = @_;
+    return unless (# Get metrics. Most common goes on top.
+        exists($track->{'Track Count'}) && 
+        exists($track->{'Track Number'}) &&
+        exists($track->{Album}) &&
+        exists($track->{Artist})
+    );
+    my $artist_or_comp = $track->{Compilation} || $track->{Artist};
+    my $album_ID;
+    if ( exists($track->{'Disc Number'}) ) 
+    {
+        $album_ID = $artist_or_comp . '_' . $track->{Album} . '_' . $track->{'Disc Number'};
+    }
+    else
+    {
+        $album_ID = $artist_or_comp . '_' . $track->{Album} . '_0';
+    }
+    # First, the easy ones
+    for my $attribute ('Artist', 'Album', 'Track Count', 'Compilation', 'Disc Number')
+    {
+        $albums{$album_ID}{$attribute} = $track->{$attribute} || 0;
+        # This is safer than it looks, because we already checked to make sure these are filled with something. So we won't get artist 0 for something that had artist null, because it won't have gotten this far anyway. 
+    }
+    # Then the more complicated ones
+    $albums{$album_ID}{'Total Time'} += $track->{'Total Time'};
+    $albums{$album_ID}{tracks_seen}[$track->{'Track Number'} - 1] = 1;
+    # And... that should be it. 
 }
 
 
