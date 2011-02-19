@@ -55,15 +55,15 @@ sub end_element {
     my $localname = $element_structure->{LocalName};
     @element_stack->shift;
     
-    if ($self->in_a_dict and $localname ne 'key')
-    {
-        # Then we must have just finished reading a value, and have exited a key/val pair. 
-        @key_stack->shift;
-    }
-    
     given ($localname)
     {
-        when (/(dict|array)/) { @data_structure_stack->shift; }
+    when (!/key/ and $self->in_a_dict)
+        {
+            # Then we must have just finished reading a value, and have exited a key/val pair. This should work for dict values too, when we finally exit them.
+            @key_stack->shift; continue
+        }
+    when (/(dict|array)/) 
+        { @data_structure_stack->shift; }
     }
 
 }
