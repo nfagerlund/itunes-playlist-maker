@@ -63,7 +63,7 @@ sub end_element {
             @key_stack->shift; continue
         }
     when (/(dict|array)/) 
-        { @data_structure_stack->shift; }
+        { $self->exit_dict_or_array; }
     }
     
     @element_stack->shift; # This should be the last thing we do, so our hungry key method works the same in characters and end_element.
@@ -115,9 +115,11 @@ sub in_an_array {
 
 sub enter_dict {
     my ($self) = @_;
+    # say $inside_tracks_dict; # testing code
     if ($self->in_a_dict)
     {
         @data_structure_stack->unshift({ name => $key_stack[0], type => 'dict'});
+        $inside_tracks_dict = 1 if $key_stack[0] eq 'Tracks';
     }
     else
     {
@@ -136,6 +138,16 @@ sub enter_array {
         @data_structure_stack->unshift({ name => '', type => 'array'});
     }
 }
+
+sub exit_dict_or_array {
+    my ($self) = @_;
+    my $erstwhile_structure = @data_structure_stack->shift; 
+    given ($erstwhile_structure->{name}) 
+    {
+        when ('Tracks') { $inside_tracks_dict = -1; }
+    }
+}
+
 
 sub start_document {
     @element_stack = ();
