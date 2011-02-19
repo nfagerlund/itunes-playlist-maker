@@ -10,8 +10,8 @@ my $parser = XML::SAX::ParserFactory->parser(
 
 
 my $temp_array = $parser->parse_uri("/Users/nick/Documents/Code/complete albums/testdata.xml");
-say "Track names: ";
-say $temp_array->join("\n");
+# say "Track names: ";
+# say $temp_array->join("\n");
 
 # 
 # say $a_hashref->keys->join("\n");
@@ -22,12 +22,22 @@ package TestSAXHandler;
 use base qw(XML::SAX::Base);
 use perl5i::2;
 
-# reduced state vars
+# state vars.
+
+# stacks:
 my @element_stack;
 my @key_stack;
 my @data_structure_stack;
+
+# Toggles:
 my $inside_tracks_dict;
 my $inside_some_track;
+
+# Scratchpads:
+my %current_track;
+
+# Products:
+my %albums;
 
 # our throwaway var for track names
 my @track_names;
@@ -82,7 +92,13 @@ sub characters {
             say $data if $data eq 'Tracks'; # test code
         }
         elsif (!defined($key_stack[0]))
-        {  say $data;  }        
+        {  say $data;  }     # test code    
+        elsif ($inside_some_track and $element_stack[0] ne 'dict')
+        {
+            # $current_track{$key_stack[0]} = $data;
+            # say $current_track{$key_stack[0]}->chop; # test code
+            say $data;
+        }
         else
         {
             @track_names->push($data) if $key_stack[0] eq 'Name';
@@ -167,8 +183,8 @@ sub start_document {
     @data_structure_stack = ();
     $inside_tracks_dict = 0;
     $inside_some_track = 0;
-#     %current_track = ();
-#     %albums = ();
+    %current_track = ();
+    %albums = ();
     
     
 }
