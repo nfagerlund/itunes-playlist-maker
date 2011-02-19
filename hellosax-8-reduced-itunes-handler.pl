@@ -9,7 +9,10 @@ my $parser = XML::SAX::ParserFactory->parser(
 );
 
 
-my $temp_array = $parser->parse_uri("/Users/nick/Documents/Code/complete albums/testdata.xml");
+my $albums_hashref = $parser->parse_uri("/Users/nick/Documents/Code/complete albums/testdata.xml");
+
+say $albums_hashref->mo->perl;
+
 # say "Track names: ";
 # say $temp_array->join("\n");
 
@@ -223,7 +226,7 @@ sub end_document {
 #     my $outputstring = %keys_seen->keys->join(", ");
 #     return $outputstring;
     # return \%albums; # or.... something. haven't identified it yet. 
-    return \@track_names;
+    return \%albums;
 }
 
 1;
