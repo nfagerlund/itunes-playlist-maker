@@ -41,10 +41,11 @@ sub start_element {
     
     given ($localname)
     {
-        when (/dict/) { @data_structure_stack->unshift({ name => 'dummy', type => 'dict'}); }
-        when (/array/) { @data_structure_stack->unshift({ name => 'dummy', type => 'array'}); }
+        when (/dict/) { $self->enter_dict; }
+        when (/array/) { $self->enter_array; }
         when (/(true|false)/) { 
-            #do something, because we won't get a characters event. 
+            # do something, because we won't get a characters event. 
+            # And I think it'll always be a value to a key. Can't see any reason to have an anonymous bool. 
             say "found a bool $_";
         }
     }
@@ -53,7 +54,6 @@ sub start_element {
 sub end_element {
     my ($self, $element_structure) = @_;
     my $localname = $element_structure->{LocalName};
-    @element_stack->shift;
     
     given ($localname)
     {
@@ -65,7 +65,8 @@ sub end_element {
     when (/(dict|array)/) 
         { @data_structure_stack->shift; }
     }
-
+    
+    @element_stack->shift; # This should be the last thing we do, so our hungry key method works the same in characters and end_element.
 }
 
 sub characters {
@@ -78,7 +79,7 @@ sub characters {
         if ($element_stack[0] eq 'key')
         {  
             @key_stack->unshift($data);
-            say $data if $data eq 'Tracks';
+            say $data if $data eq 'Tracks'; # test code
         }
         elsif (!defined($key_stack[0]))
         {  say $data;  }        
@@ -98,6 +99,42 @@ sub in_a_dict {
     )
     {  return 1;  }
     else {  return 0;  }
+}
+
+sub in_an_array {
+    # Mind, I don't think this'll ever get called. 
+    my ($self) = @_;
+    if (
+        (@data_structure_stack)
+        and
+        $data_structure_stack[0]->{type} eq 'array'
+    )
+    {  return 1;  }
+    else {  return 0;  }
+}
+
+sub enter_dict {
+    my ($self) = @_;
+    if ($self->in_a_dict)
+    {
+        @data_structure_stack->unshift({ name => $key_stack[0], type => 'dict'});
+    }
+    else
+    {
+        @data_structure_stack->unshift({ name => '', type => 'dict'});
+    }
+}
+
+sub enter_array {
+    my ($self) = @_;
+    if ($self->in_a_dict)
+    {
+        @data_structure_stack->unshift({ name => $key_stack[0], type => 'array'});
+    }
+    else
+    {
+        @data_structure_stack->unshift({ name => '', type => 'array'});
+    }
 }
 
 sub start_document {
