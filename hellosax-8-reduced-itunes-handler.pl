@@ -5,7 +5,7 @@ use perl5i::2;
 # ------ Configuration -------
 $XML::SAX::ParserPackage = "XML::SAX::ExpatXS"; # looks like this is the fastest option.
 my $length_threshold = 15; # in minutes
-my $destination_playlist = "_testplaylist_";
+my $destination_playlist = "[dm] testplaylist";
 # Apparently this needs to be protected from applescript eventually. 
 
 my $handler = TestSAXHandler->new();
@@ -92,7 +92,10 @@ end tell
 tell application "TextEdit" to set text of document "Nick's Bitched-Up Progress Meter" to "Done! Go ahead and close me."
 EOF
 
-say $applescript_string;
+# say $applescript_string; # test code
+open my $osa, "|osascript";
+say $osa $applescript_string;
+close $osa;
 
 # say $albums_hashref->mo->perl; # test code
 
@@ -299,7 +302,7 @@ sub start_document {
 }
 
 sub end_document {
-    print "\n"; # goes with the print "." up above in write_track
+    print "DONE! Generating applescript...\n"; # goes with the print "." up above in write_track
     return \%albums;
 }
 
