@@ -2,8 +2,12 @@
 use XML::SAX;
 use perl5i::2;
 
+# ------ Configuration -------
 $XML::SAX::ParserPackage = "XML::SAX::ExpatXS";
-# Oh HOLY FUCK that was fast. 
+my $length_threshold = 15; # in minutes
+my $destination_playlist = "_testplaylist_";
+# Apparently this needs to be protected from applescript eventually. 
+
 
 my $handler = TestSAXHandler->new();
 my $parser = XML::SAX::ParserFactory->parser(
@@ -16,15 +20,22 @@ $system_reported_itunes_XML =~ s/^~/$ENV{HOME}/;
 my $itunes_XML = ($ARGV[0] ? shift : $system_reported_itunes_XML);
 
 
+# ------- Procedural Logic ---------
 my $albums_hashref = $parser->parse_uri($itunes_XML);
+# say $albums_hashref->mo->perl; # test code
+sub quote_for_applescript {
+    my ($str) = @_;
+    $str =~ s/(["\\])/\\$1/g;
+    return $str;
+}
 
-say $albums_hashref->mo->perl;
+# make list of complete albums
 
-# say "Track names: ";
-# say $temp_array->join("\n");
 
-# 
-# say $a_hashref->keys->join("\n");
+
+# say $albums_hashref->mo->perl;
+
+
 
 # -----------
 
@@ -67,7 +78,6 @@ sub start_element {
         when (/true/) { 
             # I think it'll always be a value to a key. Can't see any reason to have an anonymous bool. 
             $current_track{$key_stack[0]} = 1 if ($inside_some_track);
-            # say $key_stack[0] . ' ' . $current_track{$key_stack[0]}; # test code
         }
         when (/false/) {
             $current_track{$key_stack[0]} = 0 if ($inside_some_track);
@@ -91,7 +101,7 @@ sub end_element {
         { $self->exit_dict_or_array; }
     }
     
-    @element_stack->shift; # This should be the last thing we do, so our hungry key method if we decide to make one works the same in characters and end_element.
+    @element_stack->shift;
 }
 
 sub characters {
@@ -105,13 +115,10 @@ sub characters {
         if ($element_stack[0] eq 'key')
         {  
             @key_stack->unshift($data);
-            # say $data if $data eq 'Tracks'; # test code
         }
         elsif ($inside_some_track and $element_stack[0] ne 'dict')
         {
             $current_track{$key_stack[0]} = $data;
-            # say $current_track{$key_stack[0]}; # test code
-            # say $data;
         }
         # else we don't care.
     }
@@ -142,7 +149,6 @@ sub in_an_array {
 
 sub enter_dict {
     my ($self) = @_;
-    # say $inside_tracks_dict; # testing code
     if ($self->in_a_dict)
     {
         @data_structure_stack->unshift({ name => $key_stack[0], type => 'dict'});
@@ -150,7 +156,6 @@ sub enter_dict {
         {
             # The keys for tracks will all be \d+, but I think we can ignore that.
             $inside_some_track = 1;
-            # say "Entering track " . $key_stack[0]; # test code
         }
         elsif ($key_stack[0] eq 'Tracks')
         {
@@ -182,7 +187,6 @@ sub exit_dict_or_array {
     {
         if ($erstwhile_structure->{name} eq 'Tracks') { $inside_tracks_dict = -1; }
         else { $inside_some_track = 0; 
-            # say "Leaving track " . $erstwhile_structure->{name}; # test code
             $self->write_track(\%current_track);
             %current_track = ();
         }
@@ -233,9 +237,6 @@ sub start_document {
 }
 
 sub end_document {
-#     my $outputstring = %keys_seen->keys->join(", ");
-#     return $outputstring;
-    # return \%albums; # or.... something. haven't identified it yet. 
     return \%albums;
 }
 
