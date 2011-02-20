@@ -48,7 +48,7 @@ my $itunes_XML = ($ARGV[0] ? shift : $system_reported_itunes_XML);
 my $albums_hashref = $parser->parse_uri($itunes_XML);
 
 # (BTW, if we need to dump that hash later for examination, say $albums_hashref->mo->perl;)
-say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
+# say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
 # return; # test code; uncomment this to keep the applescript from being generated. 
 
 # This function just backslash-escapes double-quotes and backslashes, so our strings stay neatly trapped inside their AppleScript double-quotes.
@@ -58,6 +58,54 @@ sub quote_for_applescript {
     return $str;
 }
 
+# Progress bar logic. These are solely for use in the progress meter. If I strip it out later, these vars can go too. 
+my $number_of_possible_complete_discs = @{$albums_hashref->keys};
+my $current_possible_complete_disc = 1;
+
+
+# The applescript fragment for each artist should look like this: 
+# duplicate (every track of musicRef whose artist is "Hiroki Kikuta" and (album is "Seiken Densetsu 3" and (disc number is 1 or disc number is 2) or album is "Seiken Densetsu 2 - Original Sound Version" and (disc number is 1))) to destRef
+# There is a fantastically serendipitous shortcut here: it turns out iTunes understands disc number == 0 the same way that I do! So I don't need to special-case that shit! Fucking amazing. 
+my @artist_fragments = ();
+
+# Here's the main loop where we compile the fragments to add each artist (and the compliations) to the playlist.
+# We build these from the inside out!
+ARTIST: while (my ($artist, $albums) = each %{$albums_hashref})
+{
+    # Document these hash formats.
+    # Update the progress bar whether or not we're actually adding this album. 
+    @artist_fragments->push("\tmy updateProgress($current_possible_complete_disc, $number_of_possible_complete_discs)\n"); # progress bar logic
+    
+    my @album_fragments = ();
+    ALBUM: while (my ($album, $discs) = each %{$artist})
+    {
+        my @disc_fragments = ();
+        DISC: while (my ($disc, $disc_attributes) = each %{$album})
+        {
+            $current_possible_complete_disc++; # Progress bar logic
+            next unless @{ $disc_attributes->{tracks_seen} } == $disc_attributes->{'Track Count'};
+            next unless $disc_attributes->{'Total Time'}/60000 >= $length_threshold;
+            for my $i (0..$disc_attributes->{tracks_seen}->last_index)
+            {
+                next DISC unless $disc_attributes->{tracks_seen}->[$i];
+            }
+            # If it made it through all that, we have a complete disc of the appropriate length. This album may have more than one disc. 
+            @disc_fragments->push("disc number is $disc");
+        }
+        if (@disc_fragments) # If this is empty, there aren't any complete discs for this album, and we're going back to ARTIST empty.
+        {
+            @album_fragments->push(
+                q{album is "} . quote_for_applescript($album) . q{" and (} . @disc_fragments->join(" or ") . ")"
+            );
+        }
+    }
+    my $artist_or_comp_statement = $artist eq 'Compilation' ? 'compilation is true' : q{artist is "} . quote_for_applescript($artist) . q{"};
+    if (@album_fragments)
+    {
+        @artist_fragments->push("\tduplicate (every track of musicRef whose $artist_or_comp_statement and (" . @album_fragments->join(" or ") . ")\n");
+    }
+}
+    
 # This will be a string in an AppleScript. Clean it.
 $destination_playlist = quote_for_applescript($destination_playlist);
 
@@ -83,55 +131,7 @@ EOF
 # * I'll probably want to remove the progress meter at some point.
 # * This is currently only medium speed -- we're using references to the playlist and the Music library, which speeds it up, but we're adding each album individually, when we should be grouping it by artist or compilation status. The more complex the statement, the faster itunes appears to go. 
 # * We delete the whole playlist, then re-build it. Only way to handle cases where someone deleted half an album between runs. 
-
-# These are solely for use in the progress meter. If I strip it out later, these vars can go too. 
-my $number_of_possible_complete_albums = @{$albums_hashref->keys};
-my $current_possible_complete_album = 1;
-
-# This function adds a single album to the applescript. 
-sub append_applescript_album_fragment {
-    my ($album) = @_;
-    $applescript_string .= "\tduplicate (every track of musicRef whose "; # Note the open-parens here.
-    if ($album->{Compilation})
-    {
-        $applescript_string .= "compilation is true";
-    }
-    else
-    {
-        $applescript_string .= q{artist is "} . quote_for_applescript($album->{Artist}) . q{"};
-        # Since this isn't Ruby, we can't execute arbitrary code in double-quotes. So it's an append festival.
-    }
-    $applescript_string .= q{ and album is "} . quote_for_applescript($album->{Album}) . q{"};
-    $applescript_string .= " and disc number is " . $album->{'Disc Number'} if $album->{'Disc Number'};
-    # Handling multi-disc albums as each album being a different disc seems like the only sane way. 
-    $applescript_string .= ") to destRef\n"; # ...and close the parentheses!
-}
-
-# ARTIST: for my $record_wad ($albums_hashref->values)
-# {
-#     # A record_wad is either the set of all compilations or the set of all albums by a given artist.
-#     # It is a hashref containing albums, each of which has a number of scalar properties and contains at least one disc, which has a disc number, a total time, a track count, and an array of tracks seen. 
-#     # Update the progress bar whether or not we're actually adding this album. 
-#     $applescript_string .= "\tmy updateProgress($current_possible_complete_album, $number_of_possible_complete_albums)\n";
-#     $current_possible_complete_album++;
-#     ALBUM: for my $album ($record_wad->values)
-#     {
-#         
-#         DISC: for my $disc ($album->
-#     }        
-#     # Skip records where we don't even have a long enough tracks_seen array:
-#     next unless @{ $album->{tracks_seen} } == $album->{'Track Count'};
-#     # Skip short records: 
-#     next unless $album->{'Total Time'}/60000 >= $length_threshold;
-#     # Skip incomplete records: 
-#     for my $i (0..$album->{tracks_seen}->last_index)
-#         {  next ALBUMS unless $album->{tracks_seen}->[$i];  }
-#     # We now know that we're looking at a complete album. Write it. 
-#     append_applescript_album_fragment($album);
-#     # test code -- If you want to just print a list of complete albums, uncomment this: 
-#     # print $album->{Compilation} ? 'Compilation' : $album->{Artist};
-#     # say ' - ' . $album->{Album} . ' (disc ' . $album->{'Disc Number'} . ')';
-# }
+$applescript_string .= @artist_fragments->join;
 
 # Finish the applescript: end the main tell and write to the progress bar one last time. 
 $applescript_string .= <<EOF;
@@ -146,7 +146,7 @@ EOF
 # say $osa $applescript_string;
 # close $osa;
 
-# say $applescript_string; # test code; uncomment to dump the applescript. 
+say $applescript_string; # test code; uncomment to dump the applescript. 
 
 
 
