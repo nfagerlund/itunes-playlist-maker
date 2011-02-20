@@ -59,7 +59,15 @@ sub quote_for_applescript {
 }
 
 # Progress bar logic. These are solely for use in the progress meter. If I strip it out later, these vars can go too. 
-my $number_of_possible_complete_discs = @{$albums_hashref->keys};
+my $number_of_possible_complete_discs;
+for my $artist ( @{$albums_hashref->values} )
+{
+    for my $album ( @{$artist->values} )
+    {
+        for my $disc ( @{$album->keys} )
+            { $number_of_possible_complete_discs++; }
+    }
+}
 my $current_possible_complete_disc = 1;
 
 
@@ -77,10 +85,10 @@ ARTIST: while (my ($artist, $albums) = each %{$albums_hashref})
     @artist_fragments->push("\tmy updateProgress($current_possible_complete_disc, $number_of_possible_complete_discs)\n"); # progress bar logic
     
     my @album_fragments = ();
-    ALBUM: while (my ($album, $discs) = each %{$artist})
+    ALBUM: while (my ($album, $discs) = each %{$albums})
     {
         my @disc_fragments = ();
-        DISC: while (my ($disc, $disc_attributes) = each %{$album})
+        DISC: while (my ($disc, $disc_attributes) = each %{$discs})
         {
             $current_possible_complete_disc++; # Progress bar logic
             next unless @{ $disc_attributes->{tracks_seen} } == $disc_attributes->{'Track Count'};
@@ -102,7 +110,7 @@ ARTIST: while (my ($artist, $albums) = each %{$albums_hashref})
     my $artist_or_comp_statement = $artist eq 'Compilation' ? 'compilation is true' : q{artist is "} . quote_for_applescript($artist) . q{"};
     if (@album_fragments)
     {
-        @artist_fragments->push("\tduplicate (every track of musicRef whose $artist_or_comp_statement and (" . @album_fragments->join(" or ") . ")\n");
+        @artist_fragments->push("\tduplicate (every track of musicRef whose $artist_or_comp_statement and (" . @album_fragments->join(" or ") . ")) to destRef\n");
     }
 }
     
@@ -115,7 +123,7 @@ tell application "TextEdit"
 	make new document with properties {name:"Nick's Bitched-Up Progress Meter", text:"Yes, I realize this is completely barbaric. Sorry, Standand Additions' godawful dialog support leaves me no choice. Starting..."}
 end tell
 on updateProgress(current, total)
-	set dialogMessage to "Adding album " & current & " of " & total & " possible"
+	set dialogMessage to "Processing album " & current & " of " & total & " possible"
 	tell application "TextEdit" to set text of document "Nick's Bitched-Up Progress Meter" to dialogMessage
 end updateProgress
 tell application "iTunes"
@@ -131,7 +139,9 @@ EOF
 # * I'll probably want to remove the progress meter at some point.
 # * This is currently only medium speed -- we're using references to the playlist and the Music library, which speeds it up, but we're adding each album individually, when we should be grouping it by artist or compilation status. The more complex the statement, the faster itunes appears to go. 
 # * We delete the whole playlist, then re-build it. Only way to handle cases where someone deleted half an album between runs. 
-$applescript_string .= @artist_fragments->join;
+
+# splice in the fragments!
+$applescript_string .= @artist_fragments->join(''); # For some reason, autobox::Core likes to throw an error if you don't give join an argument. 
 
 # Finish the applescript: end the main tell and write to the progress bar one last time. 
 $applescript_string .= <<EOF;
@@ -142,11 +152,11 @@ EOF
 # Execute the applescript. 
 # Open the osascript command as a filehandle; when you write to this, osascript will receive it as stdin. 
 # Then, write to the filehandle and close it out. 
-# open my $osa, "|osascript";
-# say $osa $applescript_string;
-# close $osa;
+open my $osa, "|osascript";
+say $osa $applescript_string;
+close $osa;
 
-say $applescript_string; # test code; uncomment to dump the applescript. 
+# say $applescript_string; # test code; uncomment to dump the applescript. 
 
 
 
