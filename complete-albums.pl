@@ -132,11 +132,11 @@ EOF
 # Execute the applescript. 
 # Open the osascript command as a filehandle; when you write to this, osascript will receive it as stdin. 
 # Then, write to the filehandle and close it out. 
-# open my $osa, "|osascript";
-# say $osa $applescript_string;
-# close $osa;
+open my $osa, "|osascript";
+say $osa $applescript_string;
+close $osa;
 
-say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
+# say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
 # say $applescript_string; # test code; uncomment to dump the applescript. 
 
 
