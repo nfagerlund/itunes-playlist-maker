@@ -30,7 +30,16 @@ sub quote_for_applescript {
 }
 
 # make list of complete albums
-
+for my $album ($albums_hashref->values)
+{
+    next unless @{ $album->{tracks_seen} } == $album->{'Track Count'};
+    next unless $album->{'Total Time'}/60000 >= $length_threshold;
+    for my $i (0..$album->{tracks_seen}->last_index)
+        {  next unless $album->{tracks_seen}->[$i];  }
+    # test code:
+    print $album->{Compilation} ? 'Compilation' : $album->{Artist};
+    say ' - ' . $album->{Album} . ' (disc ' . $album->{'Disc Number'} . ')';
+}
 
 
 # say $albums_hashref->mo->perl;
