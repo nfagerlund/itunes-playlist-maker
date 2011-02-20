@@ -28,7 +28,7 @@ my $destination_playlist = "_Complete Albums"; # This can include backslashes an
 # ----------------------------
 
 # Make a handler object; see comments in the package below. 
-my $handler = TestSAXHandler->new();
+my $handler = iTunesSAXHandler->new();
 # Make a parser object:
 my $parser = XML::SAX::ParserFactory->parser(
     Handler => $handler
@@ -163,7 +163,7 @@ close $osa;
 
 # ----------- SAX handler class ---------------
 
-package TestSAXHandler;
+package iTunesSAXHandler;
 use base qw(XML::SAX::Base); # Subclassing this gives us hard stuff for free. I'm honestly not sure if we use it, though.
 use perl5i::2;
 
