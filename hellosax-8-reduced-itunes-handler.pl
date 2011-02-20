@@ -54,18 +54,9 @@ EOF
 # make list of complete albums
 my $number_of_possible_complete_albums = @{$albums_hashref->keys};
 my $current_possible_complete_album = 1;
-for my $album ($albums_hashref->values)
-{
-    $applescript_string .= "\tmy updateProgress($current_possible_complete_album, $number_of_possible_complete_albums)\n";
-    $current_possible_complete_album++;
-    next unless @{ $album->{tracks_seen} } == $album->{'Track Count'};
-    next unless $album->{'Total Time'}/60000 >= $length_threshold;
-    for my $i (0..$album->{tracks_seen}->last_index)
-        {  next unless $album->{tracks_seen}->[$i];  }
-    # test code:
-    # print $album->{Compilation} ? 'Compilation' : $album->{Artist};
-    # say ' - ' . $album->{Album} . ' (disc ' . $album->{'Disc Number'} . ')';
-    # We now know that we're looking at a complete album. 
+
+sub append_applescript_album_fragment {
+    my ($album) = @_;
     $applescript_string .= "\tduplicate (every track of musicRef whose ";
     if ($album->{Compilation})
     {
@@ -78,6 +69,21 @@ for my $album ($albums_hashref->values)
     $applescript_string .= q{ and album is "} . quote_for_applescript($album->{Album}) . q{"};
     $applescript_string .= " and disc number is " . $album->{'Disc Number'} if $album->{'Disc Number'};
     $applescript_string .= ") to destRef\n";
+}
+
+ALBUMS: for my $album ($albums_hashref->values)
+{
+    $applescript_string .= "\tmy updateProgress($current_possible_complete_album, $number_of_possible_complete_albums)\n";
+    $current_possible_complete_album++;
+    next unless @{ $album->{tracks_seen} } == $album->{'Track Count'};
+    next unless $album->{'Total Time'}/60000 >= $length_threshold;
+    for my $i (0..$album->{tracks_seen}->last_index)
+        {  next ALBUMS unless $album->{tracks_seen}->[$i];  }
+    # We now know that we're looking at a complete album. 
+    append_applescript_album_fragment($album);
+    # test code:
+    # print $album->{Compilation} ? 'Compilation' : $album->{Artist};
+    # say ' - ' . $album->{Album} . ' (disc ' . $album->{'Disc Number'} . ')';
 }
 
 # Postlude
