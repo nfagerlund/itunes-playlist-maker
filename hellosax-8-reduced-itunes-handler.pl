@@ -15,6 +15,7 @@
 #     * group 'duplicate' statements
 #         * all tracks whose artist is foo and ( (album is bar and disc number is (baz or qux)) or (album is bats) )
 # * ...Speed up xml parsing? 
+# * Rename the file. Move the repo around. 
 
 use XML::SAX;
 use perl5i::2;
@@ -210,19 +211,22 @@ sub enter_dict {
     my ($self) = @_;
     if ($self->in_a_dict)
     {
+        # We need to store the name of the dict as well as the fact of its existence.
         @data_structure_stack->unshift({ name => $key_stack[0], type => 'dict'});
         if ($inside_tracks_dict == 1)
         {
-            # The keys for tracks will all be \d+, but I think we can ignore that.
+            # The tracks dict contains a single level of track dicts, none of which contain dicts. If we're inside the tracks dict and we enter a dict, we're entering track. The keys for tracks will all be \d+, but I think we can ignore that.
             $inside_some_track = 1;
         }
         elsif ($key_stack[0] eq 'Tracks')
         {
+            # Hey, we're going into the Tracks dict. Pretty much the only dict where we actually READ the name.
             $inside_tracks_dict = 1;
         }
     }
     else
     {
+        # This is an anonymous dict; we're in an array or in the root of a plist. 
         @data_structure_stack->unshift({ name => '', type => 'dict'});
     }
 }
@@ -231,6 +235,7 @@ sub enter_array {
     my ($self) = @_;
     if ($self->in_a_dict)
     {
+        # For the purposes of complete_albums.pl, we don't strictly need to separate the logic like this. 
         @data_structure_stack->unshift({ name => $key_stack[0], type => 'array'});
     }
     else
@@ -241,89 +246,32 @@ sub enter_array {
 
 sub exit_dict_or_array {
     my ($self) = @_;
+    # Take it off the stack:
     my $erstwhile_structure = @data_structure_stack->shift; 
     if ($inside_tracks_dict == 1)
     {
+        # We're about to leave either a track or the tracks dict itself.
         if ($erstwhile_structure->{name} eq 'Tracks') { $inside_tracks_dict = -1; }
-        else { $inside_some_track = 0; 
+        else { 
+            # We just left a track. Take note of that, write the track, and blitz the temporary variable.
+            $inside_some_track = 0; 
             $self->write_track(\%current_track);
             %current_track = ();
         }
     }
 }
 
-
-
-# ---------------
-
-
-sub start_element {
-    my ($self, $element_structure) = @_;
-    return if $inside_tracks_dict == -1;
-    my $localname = $element_structure->{LocalName};
-    @element_stack->unshift($localname);
-    
-    given ($localname)
-    {
-        when (/dict/) { $self->enter_dict; }
-        when (/array/) { $self->enter_array; }
-        when (/true/) { 
-            # I think it'll always be a value to a key. Can't see any reason to have an anonymous bool. 
-            $current_track{$key_stack[0]} = 1 if ($inside_some_track);
-        }
-        when (/false/) {
-            $current_track{$key_stack[0]} = 0 if ($inside_some_track);
-        }
-    }
-}
-
-sub end_element {
-    my ($self, $element_structure) = @_;
-    return if $inside_tracks_dict == -1;
-    my $localname = $element_structure->{LocalName};
-    
-    given ($localname)
-    {
-    when (!/key/ and $self->in_a_dict)
-        {
-            # Then we must have just finished reading a value, and have exited a key/val pair. This should work for dict values too, when we finally exit them.
-            @key_stack->shift; continue
-        }
-    when (/(dict|array)/) 
-        { $self->exit_dict_or_array; }
-    }
-    
-    @element_stack->shift;
-}
-
-sub characters {
-    my ($self, $characters_structure) = @_;
-    return if $inside_tracks_dict == -1;
-    my $data = $characters_structure->{Data};
-    
-    
-    if ($self->in_a_dict) # then it's a key or a value.
-    {
-        if ($element_stack[0] eq 'key')
-        {  
-            @key_stack->unshift($data);
-        }
-        elsif ($inside_some_track and $element_stack[0] ne 'dict')
-        {
-            $current_track{$key_stack[0]} = $data;
-        }
-        # else we don't care.
-    }
-}
-
+# Once we know everything about the track in %current_track, we can write its info to its album. 
 sub write_track {
     my ($self, $track) = @_;
+    # We check for album completeness in two steps. The first check, here, doesn't bother writing tracks that are obviously not in a complete album. The other check happens in the ALBUMS: loop.
     return unless (# Get metrics. Most common goes on top.
         exists($track->{'Track Count'}) && 
         exists($track->{'Track Number'}) &&
         exists($track->{Album}) &&
         exists($track->{Artist})
     );
+    # Instead of using nested hashes, we're currently using an album ID string to key a single level of hashes. I don't think this is as fast as it could be.
     my $artist_or_comp = $track->{Compilation} ? 'Compilation' : $track->{Artist};
     my $album_ID;
     if ( exists($track->{'Disc Number'}) ) 
@@ -334,22 +282,106 @@ sub write_track {
     {
         $album_ID = $artist_or_comp . '_' . $track->{Album} . '_0';
     }
-    # First, the easy ones
+    
+    # Convenience ref to the album hash:
+    my $album = $albums{$album_ID};
+    
+    # First, write the easy attributes:
     for my $attribute ('Artist', 'Album', 'Track Count', 'Compilation', 'Disc Number')
     {
-        $albums{$album_ID}{$attribute} = $track->{$attribute} || 0;
+        $album->{$attribute} = $track->{$attribute} || 0;
         # This is safer than it looks, because we already checked to make sure these are filled with something. So we won't get artist 0 for something that had artist null, because it won't have gotten this far anyway. 
     }
-    # Then the more complicated ones
-    $albums{$album_ID}{'Total Time'} += $track->{'Total Time'};
-    $albums{$album_ID}{tracks_seen}[$track->{'Track Number'} - 1] = 1;
+    # Then the more complicated ones:
+    $album->{'Total Time'} += $track->{'Total Time'};
+    $album->{tracks_seen}[$track->{'Track Number'} - 1] = 1;
     # And... that should be it. 
     print "."; # just for good measure
 }
 
 
+
+# ---------------
+
+
+sub start_element {
+    my ($self, $element_structure) = @_;
+    # If we're done with what we care about, then bye. 
+    return if $inside_tracks_dict == -1;
+    # For ease of use:
+    # TODO: Turn this into a reference so we're doing less assignment. 
+    my $localname = $element_structure->{LocalName};
+    # Put it on the stack so we know how deep we are.
+    @element_stack->unshift($localname);
+    
+    # If it's a key or a non-bool scalar value, the only thing that mattered here was putting it on the element stack; we can't do anything with it until we get its characters. The four types of special element require some special processing, though, which is what this is. 
+    given ($localname)
+    {
+        when (/dict/) { $self->enter_dict; }
+        when (/array/) { $self->enter_array; }
+        # Unfortunately, we have to split the logic of writing things to the %current_track hash because of the way plists do booleans. 
+        # Booleans are always the values to keys, i.e. they always happen inside a dict. Anonymous bools would be silly. 
+        when (/true/) { 
+            $current_track{$key_stack[0]} = 1 if ($inside_some_track);
+        }
+        when (/false/) {
+            $current_track{$key_stack[0]} = 0 if ($inside_some_track);
+        }
+    }
+}
+
+sub end_element {
+    my ($self, $element_structure) = @_;
+    # If we're done with what we care about, then bye. 
+    return if $inside_tracks_dict == -1;
+    # For ease of use:
+    # TODO: Turn this into a reference so we're doing less assignment. 
+    my $localname = $element_structure->{LocalName};
+    
+    # If we just finished a key, do nothing.
+    # If we just finished a value...
+    if ($localname ne 'key' and $self->in_a_dict)
+        { @key_stack->shift; }
+        # ...then we have reached the end of a key/value pair and can get that key off the stack, since we're now at the previous level of depth. This applies to dicts and arrays too, so it has to go before the next one. 
+    
+    # So also, if we just finished an array or a dict, we need to mark that we're now at a different level of data structure. 
+    if ($localname eq 'dict' or $localname eq 'array')
+        { $self->exit_dict_or_array; }
+    
+    # Get the element off the stack; we're now at a different depth. 
+    @element_stack->shift;
+}
+
+sub characters {
+    my ($self, $characters_structure) = @_;
+    # If we're done with what we care about, then bye. 
+    return if $inside_tracks_dict == -1;
+    # For ease of use:
+    # TODO: Turn this into a reference so we're doing less assignment. 
+    my $data = $characters_structure->{Data};
+    
+    # We only do work for characters if we're inside a key or a scalar non-bool value; it is literally impossible for there to be other characters events we care about. 
+    if ($self->in_a_dict) # then it's a key or a value, by definition.
+    {
+        if ($element_stack[0] eq 'key')
+        {  
+            @key_stack->unshift($data);
+        }
+        # Note that we only care about scalar values if they're part of a track. Also note that dict elements contain bogus character events consisting of whitespace, so leave those out!
+        elsif ($inside_some_track and $element_stack[0] ne 'dict')
+        {
+            $current_track{$key_stack[0]} = $data;
+        }
+        # Arrays don't happen in the two places (values inside a track and keys) where we care about characters events, so their bogus whitespace isn't an issue. We'd have to handle it if we were reading real data from arrays. 
+    }
+}
+
+
+# Time to clean up:
+
 sub end_document {
     print "DONE! Generating applescript...\n"; # goes with the print "." up above in write_track
+    # The parser will bubble up the return value of end_document and return it as the result of the parse method.
     return \%albums;
 }
 
