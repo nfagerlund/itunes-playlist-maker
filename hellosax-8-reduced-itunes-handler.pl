@@ -3,11 +3,10 @@ use XML::SAX;
 use perl5i::2;
 
 # ------ Configuration -------
-$XML::SAX::ParserPackage = "XML::SAX::ExpatXS";
+$XML::SAX::ParserPackage = "XML::SAX::ExpatXS"; # looks like this is the fastest option.
 my $length_threshold = 15; # in minutes
 my $destination_playlist = "_testplaylist_";
 # Apparently this needs to be protected from applescript eventually. 
-
 
 my $handler = TestSAXHandler->new();
 my $parser = XML::SAX::ParserFactory->parser(
@@ -15,6 +14,9 @@ my $parser = XML::SAX::ParserFactory->parser(
 );
 
 my $system_reported_itunes_XML = `defaults read com.apple.iApps iTunesRecentDatabasePaths`; # This trick courtesy Doug's iTunes Applescripts, basically. 
+# (
+#     "~/Music/iTunes/iTunes Music Library.xml"
+# )
 $system_reported_itunes_XML =~ s/\(\s*"(.+\.xml)"\s*\)/$1/s;
 $system_reported_itunes_XML =~ s/^~/$ENV{HOME}/; 
 my $itunes_XML = ($ARGV[0] ? shift : $system_reported_itunes_XML);
@@ -29,24 +31,68 @@ sub quote_for_applescript {
     return $str;
 }
 
+
+$destination_playlist = quote_for_applescript($destination_playlist);
+my $applescript_string = <<EOF;
+tell application "TextEdit"
+	make new document with properties {name:"Nick's Bitched-Up Progress Meter", text:"Yes, I realize this is completely barbaric. Sorry, Standand Additions' godawful dialog support leaves me no choice. Starting..."}
+end tell
+on updateProgress(current, total)
+	set dialogMessage to "Adding album " & current & " of " & total & " possible"
+	tell application "TextEdit" to set text of document "Nick's Bitched-Up Progress Meter" to dialogMessage
+end updateProgress
+tell application "iTunes"
+	if (exists user playlist "$destination_playlist") then
+		delete every track of user playlist "$destination_playlist"
+	else
+		make user playlist with properties {name:"$destination_playlist"}
+	end if
+	set musicRef to (get some playlist whose special kind is Music) --http://dougscripts.com/itunes/itinfo/playlists02.php
+	set destRef to user playlist "$destination_playlist"
+EOF
+
 # make list of complete albums
+my $number_of_possible_complete_albums = @{$albums_hashref->keys};
+my $current_possible_complete_album = 1;
 for my $album ($albums_hashref->values)
 {
+    $applescript_string .= "\tmy updateProgress($current_possible_complete_album, $number_of_possible_complete_albums)\n";
+    $current_possible_complete_album++;
     next unless @{ $album->{tracks_seen} } == $album->{'Track Count'};
     next unless $album->{'Total Time'}/60000 >= $length_threshold;
     for my $i (0..$album->{tracks_seen}->last_index)
         {  next unless $album->{tracks_seen}->[$i];  }
     # test code:
-    print $album->{Compilation} ? 'Compilation' : $album->{Artist};
-    say ' - ' . $album->{Album} . ' (disc ' . $album->{'Disc Number'} . ')';
+    # print $album->{Compilation} ? 'Compilation' : $album->{Artist};
+    # say ' - ' . $album->{Album} . ' (disc ' . $album->{'Disc Number'} . ')';
+    # We now know that we're looking at a complete album. 
+    $applescript_string .= "\tduplicate (every track of musicRef whose ";
+    if ($album->{Compilation})
+    {
+        $applescript_string .= "compilation is true";
+    }
+    else
+    {
+        $applescript_string .= q{artist is "} . quote_for_applescript($album->{Artist}) . q{"};
+    }
+    $applescript_string .= q{ and album is "} . quote_for_applescript($album->{Album}) . q{"};
+    $applescript_string .= " and disc number is " . $album->{'Disc Number'} if $album->{'Disc Number'};
+    $applescript_string .= ") to destRef\n";
 }
 
+# Postlude
+$applescript_string .= <<EOF;
+end tell
+tell application "TextEdit" to set text of document "Nick's Bitched-Up Progress Meter" to "Done! Go ahead and close me."
+EOF
 
-# say $albums_hashref->mo->perl;
+say $applescript_string;
+
+# say $albums_hashref->mo->perl; # test code
 
 
 
-# -----------
+# ----------- SAX handler ---------------
 
 package TestSAXHandler;
 use base qw(XML::SAX::Base);
@@ -230,6 +276,7 @@ sub write_track {
     $albums{$album_ID}{'Total Time'} += $track->{'Total Time'};
     $albums{$album_ID}{tracks_seen}[$track->{'Track Number'} - 1] = 1;
     # And... that should be it. 
+    print "."; # just for good measure
 }
 
 
@@ -246,6 +293,7 @@ sub start_document {
 }
 
 sub end_document {
+    print "\n"; # goes with the print "." up above in write_track
     return \%albums;
 }
 
