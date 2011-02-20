@@ -48,7 +48,7 @@ my $itunes_XML = ($ARGV[0] ? shift : $system_reported_itunes_XML);
 my $albums_hashref = $parser->parse_uri($itunes_XML);
 
 # (BTW, if we need to dump that hash later for examination, say $albums_hashref->mo->perl;)
-# say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
+say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
 # return; # test code; uncomment this to keep the applescript from being generated. 
 
 # This function just backslash-escapes double-quotes and backslashes, so our strings stay neatly trapped inside their AppleScript double-quotes.
@@ -107,25 +107,31 @@ sub append_applescript_album_fragment {
     $applescript_string .= ") to destRef\n"; # ...and close the parentheses!
 }
 
-ALBUMS: for my $album ($albums_hashref->values)
-{
-    # A record_wad is either the set of all compilations or the set of all albums by a given artist. It is a hashref containing albums, each of which contains at least one disc, which , arranged in a nested hash
-    # Update the progress bar whether or not we're actually adding this album. 
-    $applescript_string .= "\tmy updateProgress($current_possible_complete_album, $number_of_possible_complete_albums)\n";
-    $current_possible_complete_album++;
-    # Skip records where we don't even have a long enough tracks_seen array:
-    next unless @{ $album->{tracks_seen} } == $album->{'Track Count'};
-    # Skip short records: 
-    next unless $album->{'Total Time'}/60000 >= $length_threshold;
-    # Skip incomplete records: 
-    for my $i (0..$album->{tracks_seen}->last_index)
-        {  next ALBUMS unless $album->{tracks_seen}->[$i];  }
-    # We now know that we're looking at a complete album. Write it. 
-    append_applescript_album_fragment($album);
-    # test code -- If you want to just print a list of complete albums, uncomment this: 
-    # print $album->{Compilation} ? 'Compilation' : $album->{Artist};
-    # say ' - ' . $album->{Album} . ' (disc ' . $album->{'Disc Number'} . ')';
-}
+# ARTIST: for my $record_wad ($albums_hashref->values)
+# {
+#     # A record_wad is either the set of all compilations or the set of all albums by a given artist.
+#     # It is a hashref containing albums, each of which has a number of scalar properties and contains at least one disc, which has a disc number, a total time, a track count, and an array of tracks seen. 
+#     # Update the progress bar whether or not we're actually adding this album. 
+#     $applescript_string .= "\tmy updateProgress($current_possible_complete_album, $number_of_possible_complete_albums)\n";
+#     $current_possible_complete_album++;
+#     ALBUM: for my $album ($record_wad->values)
+#     {
+#         
+#         DISC: for my $disc ($album->
+#     }        
+#     # Skip records where we don't even have a long enough tracks_seen array:
+#     next unless @{ $album->{tracks_seen} } == $album->{'Track Count'};
+#     # Skip short records: 
+#     next unless $album->{'Total Time'}/60000 >= $length_threshold;
+#     # Skip incomplete records: 
+#     for my $i (0..$album->{tracks_seen}->last_index)
+#         {  next ALBUMS unless $album->{tracks_seen}->[$i];  }
+#     # We now know that we're looking at a complete album. Write it. 
+#     append_applescript_album_fragment($album);
+#     # test code -- If you want to just print a list of complete albums, uncomment this: 
+#     # print $album->{Compilation} ? 'Compilation' : $album->{Artist};
+#     # say ' - ' . $album->{Album} . ' (disc ' . $album->{'Disc Number'} . ')';
+# }
 
 # Finish the applescript: end the main tell and write to the progress bar one last time. 
 $applescript_string .= <<EOF;
@@ -140,7 +146,7 @@ EOF
 # say $osa $applescript_string;
 # close $osa;
 
-say $applescript_string; # test code; uncomment to dump the applescript. 
+# say $applescript_string; # test code; uncomment to dump the applescript. 
 
 
 
@@ -279,22 +285,11 @@ sub write_track {
     # Bring the destination hashref to life if necessary.
     $albums{$artist_or_comp}{$track->{Album}}{$disc_or_0} //= {}; #/# nonsense comment for bbedit
     # For convenience: 
-    my $album = $albums{$artist_or_comp}{$track->{Album}};
     my $disc = $albums{$artist_or_comp}{$track->{Album}}{$disc_or_0}; 
     
-    # First, write the easy attributes:
-    # Album attributes:
-    for my $attribute ('Artist', 'Album', 'Compilation')
-    {
-        $album->{$attribute} = $track->{$attribute} || 0;
-        # This is safer than it looks, because we already checked to make sure these are filled with something. So we won't get artist 0 for something that had artist null, because it won't have gotten this far anyway. 
-    }
-    # Disc attributes:
-    for my $attribute ('Track Count', 'Disc Number')
-    {
-        $disc->{$attribute} = $track->{$attribute} || 0;
-    }
-    # Then the more complicated ones:
+    # To save work, we're going to just read the artist-or-compilation, album, and disc number from the hash keys. Huzzah.
+    # These are the only attributes that aren't already encoded in a hash key:
+    $disc->{'Track Count'} = $track->{'Track Count'};
     $disc->{'Total Time'} += $track->{'Total Time'};
     $disc->{tracks_seen}[$track->{'Track Number'} - 1] = 1;
     # And... that should be it. 
