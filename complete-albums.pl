@@ -109,6 +109,7 @@ sub append_applescript_album_fragment {
 
 ALBUMS: for my $album ($albums_hashref->values)
 {
+    # A record_wad is either the set of all compilations or the set of all albums by a given artist. It is a hashref containing albums, each of which contains at least one disc, which , arranged in a nested hash
     # Update the progress bar whether or not we're actually adding this album. 
     $applescript_string .= "\tmy updateProgress($current_possible_complete_album, $number_of_possible_complete_albums)\n";
     $current_possible_complete_album++;
@@ -139,7 +140,7 @@ EOF
 # say $osa $applescript_string;
 # close $osa;
 
-# say $applescript_string; # test code; uncomment to dump the applescript. 
+say $applescript_string; # test code; uncomment to dump the applescript. 
 
 
 
@@ -278,17 +279,24 @@ sub write_track {
     # Bring the destination hashref to life if necessary.
     $albums{$artist_or_comp}{$track->{Album}}{$disc_or_0} //= {}; #/# nonsense comment for bbedit
     # For convenience: 
-    my $record = $albums{$artist_or_comp}{$track->{Album}}{$disc_or_0}; 
+    my $album = $albums{$artist_or_comp}{$track->{Album}};
+    my $disc = $albums{$artist_or_comp}{$track->{Album}}{$disc_or_0}; 
     
     # First, write the easy attributes:
-    for my $attribute ('Artist', 'Album', 'Track Count', 'Compilation', 'Disc Number')
+    # Album attributes:
+    for my $attribute ('Artist', 'Album', 'Compilation')
     {
-        $record->{$attribute} = $track->{$attribute} || 0;
+        $album->{$attribute} = $track->{$attribute} || 0;
         # This is safer than it looks, because we already checked to make sure these are filled with something. So we won't get artist 0 for something that had artist null, because it won't have gotten this far anyway. 
     }
+    # Disc attributes:
+    for my $attribute ('Track Count', 'Disc Number')
+    {
+        $disc->{$attribute} = $track->{$attribute} || 0;
+    }
     # Then the more complicated ones:
-    $record->{'Total Time'} += $track->{'Total Time'};
-    $record->{tracks_seen}[$track->{'Track Number'} - 1] = 1;
+    $disc->{'Total Time'} += $track->{'Total Time'};
+    $disc->{tracks_seen}[$track->{'Track Number'} - 1] = 1;
     # And... that should be it. 
     print "."; # just for good measure
 }
