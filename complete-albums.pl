@@ -46,7 +46,10 @@ my $itunes_XML = ($ARGV[0] ? shift : $system_reported_itunes_XML);
 
 # Parse the XML and return a hashref:
 my $albums_hashref = $parser->parse_uri($itunes_XML);
+
 # (BTW, if we need to dump that hash later for examination, say $albums_hashref->mo->perl;)
+# say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
+# return; # test code; uncomment this to keep the applescript from being generated. 
 
 # This function just backslash-escapes double-quotes and backslashes, so our strings stay neatly trapped inside their AppleScript double-quotes.
 sub quote_for_applescript {
@@ -132,11 +135,10 @@ EOF
 # Execute the applescript. 
 # Open the osascript command as a filehandle; when you write to this, osascript will receive it as stdin. 
 # Then, write to the filehandle and close it out. 
-open my $osa, "|osascript";
-say $osa $applescript_string;
-close $osa;
+# open my $osa, "|osascript";
+# say $osa $applescript_string;
+# close $osa;
 
-# say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
 # say $applescript_string; # test code; uncomment to dump the applescript. 
 
 
@@ -272,25 +274,21 @@ sub write_track {
     );
     # Instead of using nested hashes, we're currently using an album ID string to key a single level of hashes. I don't think this is as fast as it could be.
     my $artist_or_comp = $track->{Compilation} ? 'Compilation' : $track->{Artist};
-    my $album_ID;
-    if ( exists($track->{'Disc Number'}) ) 
-    {
-        $album_ID = $artist_or_comp . '_' . $track->{Album} . '_' . $track->{'Disc Number'};
-    }
-    else
-    {
-        $album_ID = $artist_or_comp . '_' . $track->{Album} . '_0';
-    }
+    my $disc_or_0 = $track->{'Disc Number'} || 0;
+    # Bring the destination hashref to life if necessary.
+    $albums{$artist_or_comp}{$track->{Album}}{$disc_or_0} //= {}; #/# nonsense comment for bbedit
+    # For convenience: 
+    my $record = $albums{$artist_or_comp}{$track->{Album}}{$disc_or_0}; 
     
     # First, write the easy attributes:
     for my $attribute ('Artist', 'Album', 'Track Count', 'Compilation', 'Disc Number')
     {
-        $albums{$album_ID}{$attribute} = $track->{$attribute} || 0;
+        $record->{$attribute} = $track->{$attribute} || 0;
         # This is safer than it looks, because we already checked to make sure these are filled with something. So we won't get artist 0 for something that had artist null, because it won't have gotten this far anyway. 
     }
     # Then the more complicated ones:
-    $albums{$album_ID}{'Total Time'} += $track->{'Total Time'};
-    $albums{$album_ID}{tracks_seen}[$track->{'Track Number'} - 1] = 1;
+    $record->{'Total Time'} += $track->{'Total Time'};
+    $record->{tracks_seen}[$track->{'Track Number'} - 1] = 1;
     # And... that should be it. 
     print "."; # just for good measure
 }
