@@ -131,14 +131,13 @@ EOF
 
 # Execute the applescript. 
 # Open the osascript command as a filehandle; when you write to this, osascript will receive it as stdin. 
-open my $osa, "|osascript";
-# Write to the filehandle:
-say $osa $applescript_string;
-# ...and close it out. 
-close $osa;
+# Then, write to the filehandle and close it out. 
+# open my $osa, "|osascript";
+# say $osa $applescript_string;
+# close $osa;
 
-# say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
-
+say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
+# say $applescript_string; # test code; uncomment to dump the applescript. 
 
 
 
@@ -283,18 +282,15 @@ sub write_track {
         $album_ID = $artist_or_comp . '_' . $track->{Album} . '_0';
     }
     
-    # Convenience ref to the album hash:
-    my $album = $albums{$album_ID};
-    
     # First, write the easy attributes:
     for my $attribute ('Artist', 'Album', 'Track Count', 'Compilation', 'Disc Number')
     {
-        $album->{$attribute} = $track->{$attribute} || 0;
+        $albums{$album_ID}{$attribute} = $track->{$attribute} || 0;
         # This is safer than it looks, because we already checked to make sure these are filled with something. So we won't get artist 0 for something that had artist null, because it won't have gotten this far anyway. 
     }
     # Then the more complicated ones:
-    $album->{'Total Time'} += $track->{'Total Time'};
-    $album->{tracks_seen}[$track->{'Track Number'} - 1] = 1;
+    $albums{$album_ID}{'Total Time'} += $track->{'Total Time'};
+    $albums{$album_ID}{tracks_seen}[$track->{'Track Number'} - 1] = 1;
     # And... that should be it. 
     print "."; # just for good measure
 }
