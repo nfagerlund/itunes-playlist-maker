@@ -9,13 +9,9 @@
 
 # TODO: 
 # * Remove progress bar, since we'll likely be running from cron. 
-# * Refactor to speed up applescript:
-#     * Return a more deeply-nested hash structure from the parse method
-#         * This will entail changing the write_track method and the append_applescript_album_fragment function and the loop that figures out whether the album is complete.
-#     * group 'duplicate' statements
-#         * all tracks whose artist is foo and ( (album is bar and disc number is (baz or qux)) or (album is bats) )
 # * ...Speed up xml parsing? 
-# * Rename the file. Move the repo around. 
+# * Refactor the handler class to store state in instance variables. (Currently they're all package (i.e. class) variables, which means if I have two instances of the parser object at the same time, they'll clobber each other. This is vanilla oo, so the object is actually a blessed reference; the way to get instance vars will be to assign to $self->{key} and the like. 
+    # * This will be a pretty major refactor, btw.
 
 use XML::SAX;
 use perl5i::2;
