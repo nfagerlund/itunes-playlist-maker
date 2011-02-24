@@ -163,19 +163,6 @@ package iTunesSAXHandler;
 use base qw(XML::SAX::Base); # Subclassing this gives us hard stuff for free. I'm honestly not sure if we use it, though.
 use perl5i::2;
 
-
-
-my @element_stack;
-my @key_stack;
-my @data_structure_stack;
-
-my $inside_tracks_dict;
-my $inside_some_track;
-
-my %current_track;
-
-my %albums;
-
 # ---------------
 
 sub new {
