@@ -10,8 +10,6 @@
 # TODO: 
 # * Remove progress bar, since we'll likely be running from cron. 
 # * ...Speed up xml parsing? 
-# * Refactor the handler class to store state in instance variables. (Currently they're all package (i.e. class) variables, which means if I have two instances of the parser object at the same time, they'll clobber each other. This is vanilla oo, so the object is actually a blessed reference; the way to get instance vars will be to assign to $self->{key} and the like. 
-    # * This will be a pretty major refactor, btw.
 
 use XML::SAX;
 use perl5i::2;
