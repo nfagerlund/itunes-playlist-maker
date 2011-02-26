@@ -176,6 +176,8 @@ sub new {
     # Toggles:
     $self->{_inside_tracks_dict} = 0;
     $self->{_inside_some_track} = 0;
+    $self->{_inside_playlists_array} = 0;
+    $self->{_inside_some_playlist} = 0;
     # Scratchpads:
     $self->{_current_track} = {};
     # Final products:
@@ -199,7 +201,7 @@ sub in_a_dict {
     my ($self) = @_;
     # We can tell we're in a dict if the top data structure on the stack is of type dict.
     if (
-        ($self->{_data_structure_stack}) # If we haven't entered a data structure yet, we can't attempt to access keys in a nonexistant hash.
+        defined($self->{_data_structure_stack}->[0]) # If we haven't entered a data structure yet, we can't attempt to access keys in a nonexistant hash.
         and
         $self->{_data_structure_stack}->[0]->{type} eq 'dict'
     )
@@ -228,18 +230,31 @@ sub enter_dict {
         if ($self->{_inside_tracks_dict} == 1)
         {
             # The tracks dict contains a single level of track dicts, none of which contain dicts. If we're inside the tracks dict and we enter a dict, we're entering track. The keys for tracks will all be \d+, but I think we can ignore that.
-            $self->{_inside_some_track} = 1;
+            $self->enter_some_track;
         }
         elsif ($self->{_key_stack}->[0] eq 'Tracks')
         {
             # Hey, we're going into the Tracks dict. Pretty much the only dict where we actually READ the name.
-            $self->{_inside_tracks_dict} = 1;
+            $self->enter_tracks_dict;
         }
     }
     else
     {
         # This is an anonymous dict; we're in an array or in the root of a plist. 
         $self->{_data_structure_stack}->unshift({ name => '', type => 'dict'});
+        if ($self->{_inside_playlists_array} == 1)
+        {
+            if ($self->{_inside_playlist_items_array} == 1)
+            {
+                # Then we're inside the Playlist Items array of a playlist, and are entering a dict containing just one key and value (Track ID => #####). 
+                # DO SOMETHING (todo)
+            }
+            else
+            {
+                # Then we're entering a new playlist! 
+                $self->enter_some_playlist;
+            }
+        }
     }
 }
 
@@ -249,28 +264,118 @@ sub enter_array {
     {
         # For the purposes of complete_albums.pl, we don't strictly need to separate the logic like this. 
         $self->{_data_structure_stack}->unshift({ name => $self->{_key_stack}->[0], type => 'array'});
+        if ($self->{_key_stack}->[0] eq 'Playlists')
+        {
+            # Hey, we're going into the Playlists array. 
+            $self->enter_playlists_array;
+        }
+        elsif ($self->{_key_stack}->[0] eq 'Playlist Items')
+        {
+            # Hey, we're going into the playlist items array of some playlist. 
+            $self->enter_playlist_items_array;
+        }
     }
     else
     {
+        # We're entering an anonymous array, of which none should actually exist. 
         $self->{_data_structure_stack}->unshift({ name => '', type => 'array'});
     }
 }
 
-sub exit_dict_or_array {
+sub enter_plist {
+    my ($self) = @_;
+}
+sub exit_plist {
+    my ($self) = @_;
+}
+sub enter_tracks_dict {
+    my ($self) = @_;
+    $self->{_inside_tracks_dict} = 1;
+}
+sub exit_tracks_dict {
+    my ($self) = @_;
+    $self->{_inside_tracks_dict} = -1;
+}
+sub enter_some_track {
+    my ($self) = @_;
+    $self->{_inside_some_track} = 1;
+}
+sub exit_some_track {
+    my ($self) = @_;
+    $self->{_inside_some_track} = 0; 
+    $self->write_track($self->{_current_track});
+    $self->{_current_track} = {};
+}
+sub enter_playlists_array {
+    my ($self) = @_;
+    $self->{_inside_playlists_array} = 1;
+}
+sub exit_playlists_array {
+    my ($self) = @_;
+    $self->{_inside_playlists_array} = 0;
+}
+sub enter_some_playlist {
+    my ($self) = @_;
+    $self->{_inside_some_playlist} = 1;
+}
+sub exit_some_playlist {
+    my ($self) = @_;
+    $self->{_inside_some_playlist} = 0;
+}
+sub enter_playlist_items_array {
+    my ($self) = @_;
+    $self->{_inside_playlist_items_array} = 1;
+}
+sub exit_playlist_items_array {
+    my ($self) = @_;
+    $self->{_inside_playlist_items_array} = 0;
+}
+
+sub exit_dict {
     my ($self) = @_;
     # Take it off the stack:
     my $erstwhile_structure = $self->{_data_structure_stack}->shift; 
     if ($self->{_inside_tracks_dict} == 1)
     {
         # We're about to leave either a track or the tracks dict itself.
-        if ($erstwhile_structure->{name} eq 'Tracks') { $self->{_inside_tracks_dict} = -1; }
+        if ($erstwhile_structure->{name} eq 'Tracks') { $self->exit_tracks_dict; }
         else { 
             # We just left a track. Take note of that, write the track, and blitz the temporary variable.
-            $self->{_inside_some_track} = 0; 
-            $self->write_track($self->{_current_track});
-            $self->{_current_track} = {};
+            $self->exit_some_track;
         }
     }
+    elsif ($self->{_inside_playlists_array} == 1)
+    {
+        # We're about to leave...something. The dicts we can potentially be leaving are an individual playlist, or one of the one-item track ID => #### dicts inside the Playlist Items array of some playlist.
+        if ($self->{_inside_playlist_items_array})
+        {
+            # We just left one of those one-item dicts in the playlist items array
+            # DO SOMETHING (todo)
+        }
+        else
+        {
+            # We just left some playlist completely, and will soon be moving on to the next playlist. 
+            $self->exit_some_playlist;
+        }
+    }
+
+}
+
+sub exit_array {
+    my ($self) = @_;
+    # Take it off the stack:
+    my $erstwhile_structure = $self->{_data_structure_stack}->shift; 
+    if ($erstwhile_structure->{name} eq 'Playlists')
+    {
+        # Then we just left the whole playlists array.
+        $self->exit_playlists_array;
+    }
+    elsif ($erstwhile_structure->{name} eq 'Playlist Items')
+    {
+        # Then we just left some playlist's playlist items array.
+        $self->exit_playlist_items_array;
+    }
+
 }
 
 # Once we know everything about the track in $self->{_current_track}, we can write its info to its album. 
@@ -300,7 +405,10 @@ sub write_track {
     print "."; # just for good measure
 }
 
-
+sub write_value {
+    my ($self, $key, $value) = @_;
+    $self->{_current_track}->{$key} = $value;
+}
 
 # ---------------
 
@@ -323,10 +431,13 @@ sub start_element {
         # Unfortunately, we have to split the logic of writing things to the $self->{_current_track} hash because of the way plists do booleans. 
         # Booleans are always the values to keys, i.e. they always happen inside a dict. Anonymous bools would be silly. 
         when (/true/) { 
-            $self->{_current_track}->{$self->{_key_stack}->[0]} = 1 if ($self->{_inside_some_track});
+            $self->write_value( $self->{_key_stack}->[0], 1 ) if ($self->{_inside_some_track});
         }
-        when (/false/) {
-            $self->{_current_track}->{$self->{_key_stack}->[0]} = 0 if ($self->{_inside_some_track});
+        when (/false/) { # Which I don't think ever happens, btw.
+            $self->write_value( $self->{_key_stack}->[0], 0 ) if ($self->{_inside_some_track});
+        }
+        when (/plist/) {
+            $self->enter_plist;
         }
     }
 }
@@ -346,9 +457,12 @@ sub end_element {
         # ...then we have reached the end of a key/value pair and can get that key off the stack, since we're now at the previous level of depth. This applies to dicts and arrays too, so it has to go before the next one. 
     
     # So also, if we just finished an array or a dict, we need to mark that we're now at a different level of data structure. 
-    if ($localname eq 'dict' or $localname eq 'array')
-        { $self->exit_dict_or_array; }
-    
+    if ($localname eq 'dict')
+        { $self->exit_dict; }
+    if ($localname eq 'array')
+        { $self->exit_array; }
+    if ($localname eq 'plist')
+        { $self->exit_plist; }
     # Get the element off the stack; we're now at a different depth. 
     $self->{_element_stack}->shift;
 }
@@ -371,7 +485,7 @@ sub characters {
         # Note that we only care about scalar values if they're part of a track. Also note that dict elements contain bogus character events consisting of whitespace, so leave those out!
         elsif ($self->{_inside_some_track} and $self->{_element_stack}->[0] ne 'dict')
         {
-            $self->{_current_track}->{$self->{_key_stack}->[0]} = $data;
+            $self->write_value( $self->{_key_stack}->[0], $data );
         }
         # Arrays don't happen in the two places (values inside a track and keys) where we care about characters events, so their bogus whitespace isn't an issue. We'd have to handle it if we were reading real data from arrays. 
     }
