@@ -1,0 +1,25 @@
+<collapsed-plist>
+    # some nonsense
+    <tracks>
+        # bunch of tracks
+        <track id="5075">
+            <value key="Track ID" type="integer">5075</value>
+            <value key="Name" type="string">Brighter Days</value>
+            <value key="Artist" type="string">... and Guppies Eat Their Young</value>
+            <value key="Date Added" type="date">2005-09-27T03:53:36Z</value>
+            <value key="Compilation" type="bool">1</value>
+        </track>
+    </tracks>
+    <playlists>
+        # bunch of playlists
+        <playlist>
+            <value key="Name">dc- adrian</value>
+            <value key="Playlist ID">49291</value>
+            ...
+            <items>
+                <item trackid="7600"/>
+                <item trackid="10404"/>
+            </items>
+        </playlist>
+    </playlists>
+</collapsed-plist>
