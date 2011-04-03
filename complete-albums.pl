@@ -173,63 +173,53 @@ sub new {
     $self->{_element_stack} = [];
     $self->{_key_stack} = [];
     $self->{_data_structure_stack} = [];
+    $self->{_itunes_entity_stack} = [];
+        # Possible values:
+            # plist
+            # tracks (which is a dict)
+            # some_track (which is a dict)
+            # playlists (which is an array of dicts)
+            # some_playlist (which is a dict)
+            # some_playlist_items (which is an array of one-item dicts)
     # Toggles:
     $self->{_inside_tracks_dict} = 0;
     $self->{_inside_some_track} = 0;
     $self->{_inside_playlists_array} = 0;
     $self->{_inside_some_playlist} = 0;
+    $self->{_inside_playlist_items_array} = 0;
     # Scratchpads:
-    $self->{_current_track} = {};
+    $self->{_current_item} = {};
     # Final products:
     $self->{_albums} = {};
-    
+    $self->{_tracks} = {};
+        # This is a hash keyed by track ID. Each track is a hash.
+    $self->{_playlists} = {};
+        # This is a hash keyed by playlist ID. Each playlist is a hash, with a bunch of properties and then a playlist items array. 
     bless( $self, $class );
     return $self;
-}
-
-# Initialize all those variables to zilch:
-
-sub start_document {
-    # I don't think we need to do anything in here.
 }
 
 # ---------------
 
 # Helper methods: 
 
-sub in_a_dict {
+sub current_data_structure {
     my ($self) = @_;
-    # We can tell we're in a dict if the top data structure on the stack is of type dict.
-    if (
-        defined($self->{_data_structure_stack}->[0]) # If we haven't entered a data structure yet, we can't attempt to access keys in a nonexistant hash.
-        and
-        $self->{_data_structure_stack}->[0]->{type} eq 'dict'
-    )
-    {  return 1;  }
-    else {  return 0;  }
-}
-
-sub in_an_array {
-    # Same thing. Mind, I don't think this'll ever get called. Future-proofing.
-    my ($self) = @_;
-    if (
-        ($self->{_data_structure_stack})
-        and
-        $self->{_data_structure_stack}->[0]->{type} eq 'array'
-    )
-    {  return 1;  }
-    else {  return 0;  }
+    if ( defined($self->{_data_structure_stack}->[0]) ) # If we haven't entered a data structure yet, we can't attempt to access keys in a nonexistant hash.
+        { return $self->{_data_structure_stack}->[0]->{type}; }
+    else { return ''; }
+    
 }
 
 sub enter_dict {
     my ($self) = @_;
-    if ($self->in_a_dict)
+    if ($self->current_data_structure eq 'dict')
     {
-        # We need to store the name of the dict as well as the fact of its existence.
+        # Named dict. We need to store the name as well as the fact of its existence.
         $self->{_data_structure_stack}->unshift({ name => $self->{_key_stack}->[0], type => 'dict'});
-        if ($self->{_inside_tracks_dict} == 1)
+        if ($self->{_itunes_entity_stack}->[0] eq 'tracks')
         {
-            # The tracks dict contains a single level of track dicts, none of which contain dicts. If we're inside the tracks dict and we enter a dict, we're entering track. The keys for tracks will all be \d+, but I think we can ignore that.
+            # The tracks dict contains a single level of track dicts, none of which contain dicts. If we're inside the tracks dict and we enter a dict, we're entering a track. The keys for tracks will all be \d+, but I think we can ignore that.
             $self->enter_some_track;
         }
         elsif ($self->{_key_stack}->[0] eq 'Tracks')
@@ -242,25 +232,21 @@ sub enter_dict {
     {
         # This is an anonymous dict; we're in an array or in the root of a plist. 
         $self->{_data_structure_stack}->unshift({ name => '', type => 'dict'});
-        if ($self->{_inside_playlists_array} == 1)
-        {
-            if ($self->{_inside_playlist_items_array} == 1)
+        if ($self->{_itunes_entity_stack}->[0] eq 'playlists')
+            { $self->enter_some_playlist; } # Then we're entering a new playlist! 
+        elsif ($self->{_itunes_entity_stack}->[0] eq 'some_playlist_items')
             {
                 # Then we're inside the Playlist Items array of a playlist, and are entering a dict containing just one key and value (Track ID => #####). 
                 # DO SOMETHING (todo)
             }
-            else
-            {
-                # Then we're entering a new playlist! 
-                $self->enter_some_playlist;
-            }
-        }
+        else
+            { die "Entered unknown anonymous dict!" unless $self->{_itunes_entity_stack}->[0] eq 'plist'; }
     }
 }
 
 sub enter_array {
     my ($self) = @_;
-    if ($self->in_a_dict)
+    if ($self->current_data_structure eq 'dict')
     {
         # For the purposes of complete_albums.pl, we don't strictly need to separate the logic like this. 
         $self->{_data_structure_stack}->unshift({ name => $self->{_key_stack}->[0], type => 'array'});
@@ -278,57 +264,68 @@ sub enter_array {
     else
     {
         # We're entering an anonymous array, of which none should actually exist. 
-        $self->{_data_structure_stack}->unshift({ name => '', type => 'array'});
+        # $self->{_data_structure_stack}->unshift({ name => '', type => 'array'});
+        die "Tried to enter anonymous array, none of which should actually exist.";
     }
 }
 
 sub enter_plist {
     my ($self) = @_;
+    $self->{_itunes_entity_stack}->unshift('plist');
 }
 sub exit_plist {
     my ($self) = @_;
+    my $exiting = $self->{_itunes_entity_stack}->shift;
+    die "Tried to exit plist too early!" unless $exiting eq 'plist';
 }
 sub enter_tracks_dict {
     my ($self) = @_;
-    $self->{_inside_tracks_dict} = 1;
+    $self->{_itunes_entity_stack}->unshift('tracks');
 }
 sub exit_tracks_dict {
     my ($self) = @_;
-    $self->{_inside_tracks_dict} = -1;
+    my $exiting = $self->{_itunes_entity_stack}->shift;
+    die "Tried to exit tracks too early!" unless $exiting eq 'tracks';
 }
 sub enter_some_track {
     my ($self) = @_;
-    $self->{_inside_some_track} = 1;
+    $self->{_itunes_entity_stack}->unshift('some_track');
 }
 sub exit_some_track {
     my ($self) = @_;
-    $self->{_inside_some_track} = 0; 
-    $self->write_track($self->{_current_track});
-    $self->{_current_track} = {};
+    my $exiting = $self->{_itunes_entity_stack}->shift;
+    die "Tried to exit some_track too early!" unless $exiting eq 'some_track';
+    $self->write_track($self->{_current_item});
+    $self->{_current_item} = {};
 }
 sub enter_playlists_array {
     my ($self) = @_;
-    $self->{_inside_playlists_array} = 1;
+    $self->{_itunes_entity_stack}->unshift('playlists');
 }
 sub exit_playlists_array {
     my ($self) = @_;
-    $self->{_inside_playlists_array} = 0;
+    my $exiting = $self->{_itunes_entity_stack}->shift;
+    die "Tried to exit playlists too early!" unless $exiting eq 'playlists';
 }
 sub enter_some_playlist {
     my ($self) = @_;
-    $self->{_inside_some_playlist} = 1;
+    $self->{_itunes_entity_stack}->unshift('some_playlist');
 }
 sub exit_some_playlist {
     my ($self) = @_;
-    $self->{_inside_some_playlist} = 0;
+    my $exiting = $self->{_itunes_entity_stack}->shift;
+    die "Tried to exit some_playlist too early!" unless $exiting eq 'some_playlist';
+    $self->write_playlist($self->{_current_item});
+    $self->{_current_item} = {};
 }
 sub enter_playlist_items_array {
     my ($self) = @_;
-    $self->{_inside_playlist_items_array} = 1;
+    $self->{_itunes_entity_stack}->unshift('some_playlist_items');
 }
 sub exit_playlist_items_array {
     my ($self) = @_;
-    $self->{_inside_playlist_items_array} = 0;
+    my $exiting = $self->{_itunes_entity_stack}->shift;
+    die "Tried to exit some_playlist_items too early!" unless $exiting eq 'some_playlist_items';
 }
 
 sub exit_dict {
@@ -375,48 +372,36 @@ sub exit_array {
         # Then we just left some playlist's playlist items array.
         $self->exit_playlist_items_array;
     }
+    else { die "Exited unknown array!"; }
 
 }
 
-# Once we know everything about the track in $self->{_current_track}, we can write its info to its album. 
 sub write_track {
     my ($self, $track) = @_;
-    # We check for album completeness in two steps. The first check, here, doesn't bother writing tracks that are obviously not in a complete album. The other check happens in the ALBUMS: loop.
-    return unless (# Get metrics. Most common goes on top.
-        exists($track->{'Track Count'}) && 
-        exists($track->{'Track Number'}) &&
-        exists($track->{Album}) &&
-        exists($track->{Artist})
-    );
-    # Instead of using nested hashes, we're currently using an album ID string to key a single level of hashes. I don't think this is as fast as it could be.
-    my $artist_or_comp = $track->{Compilation} ? 'Compilation' : $track->{Artist};
-    my $disc_or_0 = $track->{'Disc Number'} || 0;
-    # Bring the destination hashref to life if necessary.
-    $self->{_albums}->{$artist_or_comp}{$track->{Album}}{$disc_or_0} //= {}; #/# nonsense comment for bbedit
-    # For convenience: 
-    my $disc = $self->{_albums}->{$artist_or_comp}{$track->{Album}}{$disc_or_0}; 
-    
-    # To save work, we're going to just read the artist-or-compilation, album, and disc number from the hash keys. Huzzah.
-    # These are the only attributes that aren't already encoded in a hash key:
-    $disc->{'Track Count'} = $track->{'Track Count'};
-    $disc->{'Total Time'} += $track->{'Total Time'};
-    $disc->{tracks_seen}[$track->{'Track Number'} - 1] = 1;
-    # And... that should be it. 
-    print "."; # just for good measure
+    # Just put it in the hash. 
+    $self->{_tracks}->{ $track->{'Track ID'} } = $track;
+}
+
+sub write_playlist {
+    my ($self, $playlist) = @_;
+    # Just put it in the hash. 
+    $self->{_playlists}->{ $playlist->{'Playlist ID'} } = $playlist;
 }
 
 sub write_value {
     my ($self, $key, $value) = @_;
-    $self->{_current_track}->{$key} = $value;
+    $self->{_current_item}->{$key} = $value;
 }
 
 # ---------------
 
 
+sub start_document {
+    # I don't think we need to do anything in here.
+}
+
 sub start_element {
     my ($self, $element_structure) = @_;
-    # If we're done with what we care about, then bye. 
-    return if $self->{_inside_tracks_dict} == -1;
     # For ease of use:
     # TODO: Turn this into a reference so we're doing less assignment. 
     my $localname = $element_structure->{LocalName};
@@ -428,13 +413,13 @@ sub start_element {
     {
         when (/dict/) { $self->enter_dict; }
         when (/array/) { $self->enter_array; }
-        # Unfortunately, we have to split the logic of writing things to the $self->{_current_track} hash because of the way plists do booleans. 
+        # Unfortunately, we have to split the logic of writing things to the $self->{_current_item} hash because of the way plists do booleans. 
         # Booleans are always the values to keys, i.e. they always happen inside a dict. Anonymous bools would be silly. 
         when (/true/) { 
-            $self->write_value( $self->{_key_stack}->[0], 1 ) if ($self->{_inside_some_track});
+            $self->write_value( $self->{_key_stack}->[0], 1 ) if ($self->{_inside_some_track} or $self->{_inside_some_playlist});
         }
         when (/false/) { # Which I don't think ever happens, btw.
-            $self->write_value( $self->{_key_stack}->[0], 0 ) if ($self->{_inside_some_track});
+            $self->write_value( $self->{_key_stack}->[0], 0 ) if ($self->{_inside_some_track} or $self->{_inside_some_playlist});
         }
         when (/plist/) {
             $self->enter_plist;
@@ -444,15 +429,13 @@ sub start_element {
 
 sub end_element {
     my ($self, $element_structure) = @_;
-    # If we're done with what we care about, then bye. 
-    return if $self->{_inside_tracks_dict} == -1;
     # For ease of use:
     # TODO: Turn this into a reference so we're doing less assignment. 
     my $localname = $element_structure->{LocalName};
     
     # If we just finished a key, do nothing.
     # If we just finished a value...
-    if ($localname ne 'key' and $self->in_a_dict)
+    if ($localname ne 'key' and $self->current_data_structure eq 'dict')
         { $self->{_key_stack}->shift; }
         # ...then we have reached the end of a key/value pair and can get that key off the stack, since we're now at the previous level of depth. This applies to dicts and arrays too, so it has to go before the next one. 
     
@@ -469,25 +452,16 @@ sub end_element {
 
 sub characters {
     my ($self, $characters_structure) = @_;
-    # If we're done with what we care about, then bye. 
-    return if $self->{_inside_tracks_dict} == -1;
     # For ease of use:
     # TODO: Turn this into a reference so we're doing less assignment. 
     my $data = $characters_structure->{Data};
     
     # We only do work for characters if we're inside a key or a scalar non-bool value; it is literally impossible for there to be other characters events we care about. 
-    if ($self->in_a_dict) # then it's a key or a value, by definition.
+    given ( $self->{_element_stack}->[0] )
     {
-        if ($self->{_element_stack}->[0] eq 'key')
-        {  
-            $self->{_key_stack}->unshift($data);
-        }
-        # Note that we only care about scalar values if they're part of a track. Also note that dict elements contain bogus character events consisting of whitespace, so leave those out!
-        elsif ($self->{_inside_some_track} and $self->{_element_stack}->[0] ne 'dict')
-        {
-            $self->write_value( $self->{_key_stack}->[0], $data );
-        }
-        # Arrays don't happen in the two places (values inside a track and keys) where we care about characters events, so their bogus whitespace isn't an issue. We'd have to handle it if we were reading real data from arrays. 
+        when (/^(dict|array)$/) {return;} # Neither dicts nor arrays have any bare character events we care about; they're all hidden away in nested dicts.
+        when (/^key$/) { $self->{_key_stack}->unshift($data); }
+        default { $self->write_value( $self->{_key_stack}->[0], $data ); } # Must be a value associated with a key.
     }
 }
 
@@ -498,7 +472,7 @@ sub end_document {
     my $self = shift;
     print "DONE! Generating applescript...\n"; # goes with the print "." up above in write_track
     # The parser will bubble up the return value of end_document and return it as the result of the parse method.
-    return $self->{_albums};
+    return { tracks => $self->{_tracks}, playlists => $self->{_playlists} };
 }
 
 1;
