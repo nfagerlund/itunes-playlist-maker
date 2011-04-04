@@ -67,16 +67,16 @@ sub new {
     $self->{_data_structure_stack} = [];
     $self->{_itunes_entity_stack} = [];
         # Possible values:
-            # plist
+            # plist (which is a dict)
             # tracks (which is a dict)
             # some_track (which is a dict)
             # playlists (which is an array of dicts)
             # some_playlist (which is a dict)
             # some_playlist_items (which is an array of one-item dicts)
+            # some_individual_playlist_item (which is a dict w/ one item)
     # Scratchpads:
     $self->{_current_item} = {};
     # Final products:
-    $self->{_albums} = {};
     $self->{_tracks} = {};
         # This is a hash keyed by track ID. Each track is a hash.
     $self->{_playlists} = {};
@@ -87,213 +87,62 @@ sub new {
 
 # ---------------
 
-# Helper methods: 
-
-sub current_data_structure {
-    my ($self) = @_;
-    if ( defined($self->{_data_structure_stack}->[0]) ) # If we haven't entered a data structure yet, we can't attempt to access keys in a nonexistant hash.
-        { return $self->{_data_structure_stack}->[0]->{type}; }
-    else { return ''; }
-    
-}
-
-sub enter_dict {
-    my ($self) = @_;
-    if ($self->current_data_structure eq 'dict')
-    {
-        # Named dict. We need to store the name as well as the fact of its existence.
-        $self->{_data_structure_stack}->unshift({ name => $self->{_key_stack}->[0], type => 'dict'});
-        if ($self->{_itunes_entity_stack}->[0] eq 'tracks')
-        {
-            # The tracks dict contains a single level of track dicts, none of which contain dicts. If we're inside the tracks dict and we enter a dict, we're entering a track. The keys for tracks will all be \d+, but I think we can ignore that.
-            $self->enter_some_track;
-        }
-        elsif ($self->{_key_stack}->[0] eq 'Tracks')
-        {
-            # Hey, we're going into the Tracks dict. Pretty much the only dict where we actually READ the name.
-            $self->enter_tracks_dict;
-        }
-    }
-    else
-    {
-        # This is an anonymous dict; we're in an array or in the root of a plist. 
-        $self->{_data_structure_stack}->unshift({ name => '', type => 'dict'});
-        if ($self->{_itunes_entity_stack}->[0] eq 'playlists')
-            { $self->enter_some_playlist; } # Then we're entering a new playlist! 
-        elsif ($self->{_itunes_entity_stack}->[0] eq 'some_playlist_items')
-            {
-                # Then we're inside the Playlist Items array of a playlist, and are entering a dict containing just one key and value (Track ID => #####). 
-                # DO SOMETHING (todo)
-            }
-        else
-            { die "Entered unknown anonymous dict!" unless $self->{_itunes_entity_stack}->[0] eq 'plist'; }
-    }
-}
-
-sub enter_array {
-    my ($self) = @_;
-    if ($self->current_data_structure eq 'dict')
-    {
-        # For the purposes of complete_albums.pl, we don't strictly need to separate the logic like this. 
-        $self->{_data_structure_stack}->unshift({ name => $self->{_key_stack}->[0], type => 'array'});
-        if ($self->{_key_stack}->[0] eq 'Playlists')
-        {
-            # Hey, we're going into the Playlists array. 
-            $self->enter_playlists_array;
-        }
-        elsif ($self->{_key_stack}->[0] eq 'Playlist Items')
-        {
-            # Hey, we're going into the playlist items array of some playlist. 
-            $self->enter_playlist_items_array;
-        }
-        else { die "Tried to enter unknown named array " . $self->{_key_stack}->[0]; }
-    }
-    else
-    {
-        # We're entering an anonymous array, of which none should actually exist. 
-        # $self->{_data_structure_stack}->unshift({ name => '', type => 'array'});
-        die "Tried to enter anonymous array, none of which should actually exist.";
-    }
-}
-
-sub enter_plist {
-    my ($self) = @_;
-    $self->{_itunes_entity_stack}->unshift('plist');
-}
-sub exit_plist {
-    my ($self) = @_;
-    my $exiting = $self->{_itunes_entity_stack}->shift;
-    die "Tried to exit plist too early!" unless $exiting eq 'plist';
-}
-sub enter_tracks_dict {
-    my ($self) = @_;
-    $self->{_itunes_entity_stack}->unshift('tracks');
-}
-sub exit_tracks_dict {
-    my ($self) = @_;
-    my $exiting = $self->{_itunes_entity_stack}->shift;
-    die "Tried to exit tracks too early!" unless $exiting eq 'tracks';
-}
-sub enter_some_track {
-    my ($self) = @_;
-    $self->{_itunes_entity_stack}->unshift('some_track');
-}
-sub exit_some_track {
-    my ($self) = @_;
-    my $exiting = $self->{_itunes_entity_stack}->shift;
-    die "Tried to exit some_track too early!" unless $exiting eq 'some_track';
-    $self->write_track($self->{_current_item});
-    $self->{_current_item} = {};
-}
-sub enter_playlists_array {
-    my ($self) = @_;
-    $self->{_itunes_entity_stack}->unshift('playlists');
-}
-sub exit_playlists_array {
-    my ($self) = @_;
-    my $exiting = $self->{_itunes_entity_stack}->shift;
-    die "Tried to exit playlists too early!" unless $exiting eq 'playlists';
-}
-sub enter_some_playlist {
-    my ($self) = @_;
-    $self->{_itunes_entity_stack}->unshift('some_playlist');
-}
-sub exit_some_playlist {
-    my ($self) = @_;
-    my $exiting = $self->{_itunes_entity_stack}->shift;
-    die "Tried to exit some_playlist too early!" unless $exiting eq 'some_playlist';
-    $self->write_playlist($self->{_current_item});
-    $self->{_current_item} = {};
-}
-sub enter_playlist_items_array {
-    my ($self) = @_;
-    $self->{_itunes_entity_stack}->unshift('some_playlist_items');
-}
-sub exit_playlist_items_array {
-    my ($self) = @_;
-    my $exiting = $self->{_itunes_entity_stack}->shift;
-    die "Tried to exit some_playlist_items too early!" unless $exiting eq 'some_playlist_items';
-}
-
-sub exit_dict {
-    my ($self) = @_;
-    # Take it off the stack:
-    my $erstwhile_structure = $self->{_data_structure_stack}->shift; 
-    given ($self->{_itunes_entity_stack}->[0])
-    
-    {
-        when (/tracks/) { $self->exit_tracks_dict; }
-        when (/some_track/) { $self->exit_some_track; }
-        when (/some_playlist$/) { $self->exit_some_playlist; }
-        when (/some_playlist_items/) {
-            # Oh hey, we just left one of those one-item dicts. Do nothing; either there's another one coming up, or we're about to exit the playlist items array.
-        }
-        when (/plist/) {  } # Do nothing, we'll leave the plist in a sec. 
-        default { die "We just left an unknown dict of some kind (see the exit_dict method)"; }
-    }
-
-}
-
-sub exit_array {
-    my ($self) = @_;
-    # Take it off the stack:
-    my $erstwhile_structure = $self->{_data_structure_stack}->shift; 
-    given ($self->{_itunes_entity_stack}->[0])
-    {
-        when (/playlists/) { $self->exit_playlists_array; }
-        when (/some_playlist_items/) { $self->exit_playlist_items_array; }
-        default { die "What? We just tried to exit an unknown array."; }
-    }
-
-}
-
-sub write_track {
-    my ($self, $track) = @_;
-    # Just put it in the hash. 
-    $self->{_tracks}->{ $track->{'Track ID'} } = $track;
-}
-
-sub write_playlist {
-    my ($self, $playlist) = @_;
-    # Just put it in the hash. 
-    $self->{_playlists}->{ $playlist->{'Playlist ID'} } = $playlist;
-}
-
-sub write_value {
-    my ($self, $key, $value) = @_;
-    $self->{_current_item}->{$key} = $value;
-}
-
-# ---------------
-
-
 sub start_document {
     # I don't think we need to do anything in here.
 }
 
 sub start_element {
     my ($self, $element_structure) = @_;
-    # For ease of use:
-    # TODO: Turn this into a reference so we're doing less assignment. 
-    my $localname = $element_structure->{LocalName};
-    # Put it on the stack so we know how deep we are.
-    $self->{_element_stack}->unshift($localname);
-    
     # If it's a key or a non-bool scalar value, the only thing that mattered here was putting it on the element stack; we can't do anything with it until we get its characters. The four types of special element require some special processing, though, which is what this is. 
-    given ($localname)
+    given ( $element_structure->{LocalName} )
     {
-        when (/dict/) { $self->enter_dict; }
-        when (/array/) { $self->enter_array; }
+        # Put it on the stack so we know how deep we are.
+        $self->{_element_stack}->unshift($_);
+        # Select based on what we just entered.
+        when (/(dict|array)/) 
+        { 
+            given ( $self->{_itunes_entity_stack}->[0] )
+            {
+                when (undef)
+                { # We're entering the dict directly under the plist element.
+                    $self->{_itunes_entity_stack}->unshift('plist');
+                }
+                when ('plist')
+                { # We're entering either playlists or tracks.
+                    $self->{_itunes_entity_stack}->unshift( lc($self->{_key_stack}->[0]) );
+                }
+                when ('tracks')
+                { # we're entering some track.
+                    $self->{_itunes_entity_stack}->unshift('some_track');
+                }
+                when ('some_track') {die "There should be no dicts/arrays inside tracks.";}
+                when ('playlists') 
+                { # We're entering some playlist.
+                    $self->{_itunes_entity_stack}->unshift('some_playlist');
+                }
+                when ('some_playlist')
+                { # We're entering a playlist items array.
+                    $self->{_itunes_entity_stack}->unshift('some_playlist_items');
+                    $self->{_current_item}->{'Playlist Items'} = []; # Initialize items array in the scratchpad. Each playlist should only have one items array.
+                }
+                when ('some_playlist_items')
+                {
+                    $self->{_itunes_entity_stack}->unshift('some_individual_playlist_item');
+                }
+                when ('some_individual_playlist_item') {die "There should be no dicts/arrays inside a a playlist item.";}
+                default {die "Something weird just happened when entering an array or dict.";}
+            }
+        }
         # Unfortunately, we have to split the logic of writing things to the $self->{_current_item} hash because of the way plists do booleans. 
         # Booleans are always the values to keys, i.e. they always happen inside a dict. Anonymous bools would be silly. 
         when (/true/) { 
-            $self->write_value( $self->{_key_stack}->[0], 1 ) if ($self->{_itunes_entity_stack}->[0] =~ /^some_(track|playlist)$/);
+            $self->{_current_item}->{ $self->{_key_stack}->[0] } = 1 if ($self->{_itunes_entity_stack}->[0] =~ /^some_(track|playlist)$/);
         }
         when (/false/) { # Which I don't think ever happens, btw.
-            $self->write_value( $self->{_key_stack}->[0], 0 ) if ($self->{_itunes_entity_stack}->[0] =~ /^some_(track|playlist)$/);
+            $self->{_current_item}->{ $self->{_key_stack}->[0] } = 0 if ($self->{_itunes_entity_stack}->[0] =~ /^some_(track|playlist)$/);
         }
-        when (/plist/) {
-            $self->enter_plist;
+        default {
+            # do nothing aside from the element stack thing above. This includes keys, values, and the root plist element.
         }
     }
 }
@@ -302,21 +151,42 @@ sub end_element {
     my ($self, $element_structure) = @_;
     # For ease of use:
     # TODO: Turn this into a reference so we're doing less assignment. 
-    my $localname = $element_structure->{LocalName};
-    
-    # If we just finished a key, do nothing.
-    # If we just finished a value...
-    if ($localname ne 'key' and $self->current_data_structure eq 'dict')
-        { $self->{_key_stack}->shift; }
-        # ...then we have reached the end of a key/value pair and can get that key off the stack, since we're now at the previous level of depth. This applies to dicts and arrays too, so it has to go before the next one. 
-    
-    # So also, if we just finished an array or a dict, we need to mark that we're now at a different level of data structure. 
-    if ($localname eq 'dict')
-        { $self->exit_dict; }
-    if ($localname eq 'array')
-        { $self->exit_array; }
-    if ($localname eq 'plist')
-        { $self->exit_plist; }
+    given ( $element_structure->{LocalName} )
+    {
+        when (/(dict|array)/)
+        {
+            # Every type of dict and array that exists should be accounted for as an itunes entity type.
+            my $exiting = $self->{_itunes_entity_stack}->shift;
+            if ($exiting eq 'some_track')
+            { 
+                # Write the track and clear the scratchpad.
+                $self->{_tracks}->{ $self->{_current_item}->{'Track ID'} } = $self->{_current_item};
+                $self->{_current_item} = {};
+            }
+            elsif ($exiting eq 'some_playlist')
+            {
+                # Write the playlist and clear the scratchpad.
+                $self->{_playlists}->{ $self->{_current_item}->{'Playlist ID'} } = $self->{_current_item};
+                $self->{_current_item} = {};
+            }
+            if ( defined( $self->{_itunes_entity_stack}->[0] ) )
+            {
+                $self->{_key_stack}->shift unless ($self->{_itunes_entity_stack}->[0] =~ /(playlists|some_playlist_items)/);
+                # Unless it's enclosed in an array, this dict or array had an associated key.
+            }
+        }
+        when ('key') {} # Do nothing, we caught the characters event already.
+        when ('plist') {
+            die "Tried to exit plist too early!" if defined( $self->{_itunes_entity_stack}->[0] );
+            # Because we enter and exit the plist entity based on the dict directly inside it, rather than the plist element itself.
+        }
+        default 
+        {
+            # We must have just finished a scalar value...
+            $self->{_key_stack}->shift;
+            # ...so get that key off the stack.
+        }
+    }
     # Get the element off the stack; we're now at a different depth. 
     $self->{_element_stack}->shift;
 }
@@ -339,10 +209,9 @@ sub characters {
             if ( $self->{_itunes_entity_stack}->[0] eq 'some_playlist_items' )
             { # Maybe we're in a playlist items array! 
                 die "Something weird happened in a playlist items array!" unless ($self->{_key_stack}->[0] eq 'Track ID');
-                $self->{_current_item}->{'Playlist Items'} //= []; # /# initialize array if undefined.
                 $self->{_current_item}->{'Playlist Items'}->push($data);
             } 
-            else { $self->write_value( $self->{_key_stack}->[0], $data ); } # Nope, as per normal.
+            else { $self->{_current_item}->{ $self->{_key_stack}->[0] } = $data; } # Nope, as per normal.
         } 
     }
 }
