@@ -330,7 +330,8 @@ sub characters {
     # We only do work for characters if we're inside a key or a scalar non-bool value; it is literally impossible for there to be other characters events we care about. 
     given ( $self->{_element_stack}->[0] )
     {
-        when (/^(dict|array)$/) {return;} # Neither dicts nor arrays have any bare character events we care about; they're all hidden away in nested dicts.
+        when (undef) {return;} # Let's see if this kills that warning.
+        when (/^(dict|array|plist)$/) {return;} # Neither dicts nor arrays nor the root element have any bare character events we care about; they're all hidden away in nested dicts.
         when (/^key$/) { $self->{_key_stack}->unshift($data); }
         default 
         { 
