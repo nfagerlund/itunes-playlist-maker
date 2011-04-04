@@ -51,7 +51,10 @@ say $library->mo->perl; # test code; uncomment this to dump the hashref returned
 
 package iTunesSAXHandler;
 use base qw(XML::SAX::Base); # Subclassing this gives us hard stuff for free. I'm honestly not sure if we use it, though.
-use perl5i::2;
+# use perl5i::2;
+use strict;
+use warnings;
+use feature ":5.10";
 
 # ---------------
 
