@@ -17,8 +17,6 @@ use perl5i::2;
 
 # ------ Configuration -------
 $XML::SAX::ParserPackage = "XML::SAX::ExpatXS"; # Choose a SAX parser. This one is fast.
-my $length_threshold = 15; # in minutes. 
-my $destination_playlist = "_Complete Albums"; # This can include backslashes and "s if need be; we'll escape it later. 
 # ----------------------------
 
 # Make a handler object; see comments in the package below. 
@@ -39,118 +37,12 @@ $system_reported_itunes_XML =~ s/^~/$ENV{HOME}/;
 my $itunes_XML = ($ARGV[0] ? shift : $system_reported_itunes_XML);
 
 # Parse the XML and return a hashref:
-my $albums_hashref = $parser->parse_uri($itunes_XML);
+my $library = $parser->parse_uri($itunes_XML);
 
 # (BTW, if we need to dump that hash later for examination, say $albums_hashref->mo->perl;)
-# say $albums_hashref->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
+say $library->mo->perl; # test code; uncomment this to dump the hashref returned by the parse method.
 # return; # test code; uncomment this to keep the applescript from being generated. 
 
-# This function just backslash-escapes double-quotes and backslashes, so our strings stay neatly trapped inside their AppleScript double-quotes.
-sub quote_for_applescript {
-    my ($str) = @_;
-    $str =~ s/(["\\])/\\$1/g;
-    return $str;
-}
-
-# Progress bar logic. These are solely for use in the progress meter. If I strip it out later, these vars can go too. 
-my $number_of_possible_complete_discs;
-for my $artist ( @{$albums_hashref->values} )
-{
-    for my $album ( @{$artist->values} )
-    {
-        for my $disc ( @{$album->keys} )
-            { $number_of_possible_complete_discs++; }
-    }
-}
-my $current_possible_complete_disc = 1;
-
-
-# The applescript fragment for each artist should look like this: 
-# duplicate (every track of musicRef whose artist is "Hiroki Kikuta" and (album is "Seiken Densetsu 3" and (disc number is 1 or disc number is 2) or album is "Seiken Densetsu 2 - Original Sound Version" and (disc number is 1))) to destRef
-# There is a fantastically serendipitous shortcut here: it turns out iTunes understands disc number == 0 the same way that I do! So I don't need to special-case that shit! Fucking amazing. 
-my @artist_fragments = ();
-
-# Here's the main loop where we compile the fragments to add each artist (and the compliations) to the playlist.
-# We build these from the inside out!
-ARTIST: while (my ($artist, $albums) = each %{$albums_hashref})
-{
-    # Document these hash formats.
-    # Update the progress bar whether or not we're actually adding this album. 
-    @artist_fragments->push("\tmy updateProgress($current_possible_complete_disc, $number_of_possible_complete_discs)\n"); # progress bar logic
-    
-    my @album_fragments = ();
-    ALBUM: while (my ($album, $discs) = each %{$albums})
-    {
-        my @disc_fragments = ();
-        DISC: while (my ($disc, $disc_attributes) = each %{$discs})
-        {
-            $current_possible_complete_disc++; # Progress bar logic
-            next unless @{ $disc_attributes->{tracks_seen} } == $disc_attributes->{'Track Count'};
-            next unless $disc_attributes->{'Total Time'}/60000 >= $length_threshold;
-            for my $i (0..$disc_attributes->{tracks_seen}->last_index)
-            {
-                next DISC unless $disc_attributes->{tracks_seen}->[$i];
-            }
-            # If it made it through all that, we have a complete disc of the appropriate length. This album may have more than one disc. 
-            @disc_fragments->push("disc number is $disc");
-        }
-        if (@disc_fragments) # If this is empty, there aren't any complete discs for this album, and we're going back to ARTIST empty.
-        {
-            @album_fragments->push(
-                q{album is "} . quote_for_applescript($album) . q{" and (} . @disc_fragments->join(" or ") . ")"
-            );
-        }
-    }
-    my $artist_or_comp_statement = $artist eq 'Compilation' ? 'compilation is true' : q{artist is "} . quote_for_applescript($artist) . q{"};
-    if (@album_fragments)
-    {
-        @artist_fragments->push("\tduplicate (every track of musicRef whose $artist_or_comp_statement and (" . @album_fragments->join(" or ") . ")) to destRef\n");
-    }
-}
-    
-# This will be a string in an AppleScript. Clean it.
-$destination_playlist = quote_for_applescript($destination_playlist);
-
-# This variable will contain the entire AppleScript we'll eventually be executing. This primes it with a preamble. 
-my $applescript_string = <<EOF;
-tell application "TextEdit"
-	make new document with properties {name:"Nick's Bitched-Up Progress Meter", text:"Yes, I realize this is completely barbaric. Sorry, Standand Additions' godawful dialog support leaves me no choice. Starting..."}
-end tell
-on updateProgress(current, total)
-	set dialogMessage to "Processing album " & current & " of " & total & " possible"
-	tell application "TextEdit" to set text of document "Nick's Bitched-Up Progress Meter" to dialogMessage
-end updateProgress
-tell application "iTunes"
-	if (exists user playlist "$destination_playlist") then
-		delete every track of user playlist "$destination_playlist"
-	else
-		make user playlist with properties {name:"$destination_playlist"}
-	end if
-	set musicRef to (get some playlist whose special kind is Music) --http://dougscripts.com/itunes/itinfo/playlists02.php
-	set destRef to user playlist "$destination_playlist"
-EOF
-# Notes on that: 
-# * I'll probably want to remove the progress meter at some point.
-# * This is currently only medium speed -- we're using references to the playlist and the Music library, which speeds it up, but we're adding each album individually, when we should be grouping it by artist or compilation status. The more complex the statement, the faster itunes appears to go. 
-# * We delete the whole playlist, then re-build it. Only way to handle cases where someone deleted half an album between runs. 
-
-# splice in the fragments!
-$applescript_string .= @artist_fragments->join(''); # For some reason, autobox::Core likes to throw an error if you don't give join an argument. 
-
-# Finish the applescript: end the main tell and write to the progress bar one last time. 
-$applescript_string .= <<EOF;
-end tell
-tell application "TextEdit" to set text of document "Nick's Bitched-Up Progress Meter" to "Done! Go ahead and close me."
-EOF
-
-# Execute the applescript. 
-# Open the osascript command as a filehandle; when you write to this, osascript will receive it as stdin. 
-# Then, write to the filehandle and close it out. 
-open my $osa, "|osascript";
-say $osa $applescript_string;
-close $osa;
-
-# say $applescript_string; # test code; uncomment to dump the applescript. 
 
 
 
@@ -260,6 +152,7 @@ sub enter_array {
             # Hey, we're going into the playlist items array of some playlist. 
             $self->enter_playlist_items_array;
         }
+        else { die "Tried to enter unknown named array " . $self->{_key_stack}->[0]; }
     }
     else
     {
@@ -461,7 +354,17 @@ sub characters {
     {
         when (/^(dict|array)$/) {return;} # Neither dicts nor arrays have any bare character events we care about; they're all hidden away in nested dicts.
         when (/^key$/) { $self->{_key_stack}->unshift($data); }
-        default { $self->write_value( $self->{_key_stack}->[0], $data ); } # Must be a value associated with a key.
+        default 
+        { 
+            # Must be a value associated with a key. But...
+            if ( $self->{_itunes_entity_stack}->[0] eq 'some_playlist_items' )
+            { # Maybe we're in a playlist items array! 
+                die "Something weird happened in a playlist items array!" unless ($self->{_key_stack}->[0] eq 'Track ID');
+                $self->{_current_item}->{'Playlist Items'} //= []; # /# initialize array if undefined.
+                $self->{_current_item}->{'Playlist Items'}->push($data);
+            } 
+            else { $self->write_value( $self->{_key_stack}->[0], $data ); } # Nope, as per normal.
+        } 
     }
 }
 
