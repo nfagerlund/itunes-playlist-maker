@@ -97,7 +97,7 @@ sub start_element {
     given ( $element_structure->{LocalName} )
     {
         # Put it on the stack so we know how deep we are.
-        $self->{_element_stack}->unshift($_);
+        unshift( @{ $self->{_element_stack} }, $_);
         # Select based on what we just entered.
         when (/(dict|array)/) 
         { 
@@ -105,29 +105,29 @@ sub start_element {
             {
                 when (undef)
                 { # We're entering the dict directly under the plist element.
-                    $self->{_itunes_entity_stack}->unshift('plist');
+                    unshift( @{ $self->{_itunes_entity_stack} }, 'plist');
                 }
                 when ('plist')
                 { # We're entering either playlists or tracks.
-                    $self->{_itunes_entity_stack}->unshift( lc($self->{_key_stack}->[0]) );
+                    unshift( @{ $self->{_itunes_entity_stack} }, lc($self->{_key_stack}->[0]) );
                 }
                 when ('tracks')
                 { # we're entering some track.
-                    $self->{_itunes_entity_stack}->unshift('some_track');
+                    unshift( @{ $self->{_itunes_entity_stack} }, 'some_track');
                 }
                 when ('some_track') {die "There should be no dicts/arrays inside tracks.";}
                 when ('playlists') 
                 { # We're entering some playlist.
-                    $self->{_itunes_entity_stack}->unshift('some_playlist');
+                    unshift( @{ $self->{_itunes_entity_stack} }, 'some_playlist');
                 }
                 when ('some_playlist')
                 { # We're entering a playlist items array.
-                    $self->{_itunes_entity_stack}->unshift('some_playlist_items');
+                    unshift( @{ $self->{_itunes_entity_stack} }, 'some_playlist_items');
                     $self->{_current_item}->{'Playlist Items'} = []; # Initialize items array in the scratchpad. Each playlist should only have one items array.
                 }
                 when ('some_playlist_items')
                 {
-                    $self->{_itunes_entity_stack}->unshift('some_individual_playlist_item');
+                    unshift( @{ $self->{_itunes_entity_stack} }, 'some_individual_playlist_item');
                 }
                 when ('some_individual_playlist_item') {die "There should be no dicts/arrays inside a a playlist item.";}
                 default {die "Something weird just happened when entering an array or dict.";}
@@ -156,7 +156,7 @@ sub end_element {
         when (/(dict|array)/)
         {
             # Every type of dict and array that exists should be accounted for as an itunes entity type.
-            my $exiting = $self->{_itunes_entity_stack}->shift;
+            my $exiting = shift @{ $self->{_itunes_entity_stack} };
             if ($exiting eq 'some_track')
             { 
                 # Write the track and clear the scratchpad.
@@ -171,7 +171,7 @@ sub end_element {
             }
             if ( defined( $self->{_itunes_entity_stack}->[0] ) )
             {
-                $self->{_key_stack}->shift unless ($self->{_itunes_entity_stack}->[0] =~ /(playlists|some_playlist_items)/);
+                shift @{ $self->{_key_stack} } unless ($self->{_itunes_entity_stack}->[0] =~ /(playlists|some_playlist_items)/);
                 # Unless it's enclosed in an array, this dict or array had an associated key.
             }
         }
@@ -183,12 +183,12 @@ sub end_element {
         default 
         {
             # We must have just finished a scalar value...
-            $self->{_key_stack}->shift;
+            shift @{ $self->{_key_stack} };
             # ...so get that key off the stack.
         }
     }
     # Get the element off the stack; we're now at a different depth. 
-    $self->{_element_stack}->shift;
+    shift @{ $self->{_element_stack} };
 }
 
 sub characters {
@@ -202,14 +202,14 @@ sub characters {
     {
         when (undef) {return;} # Let's see if this kills that warning.
         when (/^(dict|array|plist)$/) {return;} # Neither dicts nor arrays nor the root element have any bare character events we care about; they're all hidden away in nested dicts.
-        when (/^key$/) { $self->{_key_stack}->unshift($data); }
+        when (/^key$/) { unshift( @{ $self->{_key_stack} }, $data); }
         default 
         { 
             # Must be a value associated with a key. But...
             if ( $self->{_itunes_entity_stack}->[0] eq 'some_individual_playlist_item' )
             { # Maybe we're in a playlist item! In which case, append it.
                 die "Something weird happened in a playlist items array!" unless ($self->{_key_stack}->[0] eq 'Track ID');
-                $self->{_current_item}->{'Playlist Items'}->push($data);
+                push( @{ $self->{_current_item}->{'Playlist Items'} }, $data);
             } 
             else { $self->{_current_item}->{ $self->{_key_stack}->[0] } = $data; } # Nope, as per normal.
         } 
