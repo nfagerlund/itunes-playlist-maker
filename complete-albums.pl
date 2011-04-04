@@ -198,23 +198,23 @@ sub characters {
     my ($self, $characters_structure) = @_;
     # For ease of use:
     # TODO: Turn this into a reference so we're doing less assignment. 
-    my $data = $characters_structure->{Data};
+    # my $data = $characters_structure->{Data};
     
     # We only do work for characters if we're inside a key or a scalar non-bool value; it is literally impossible for there to be other characters events we care about. 
     given ( $self->{_element_stack}->[0] )
     {
         when (undef) {return;} # Let's see if this kills that warning.
         when (/^(dict|array|plist)$/) {return;} # Neither dicts nor arrays nor the root element have any bare character events we care about; they're all hidden away in nested dicts.
-        when (/^key$/) { unshift( @{ $self->{_key_stack} }, $data); }
+        when (/^key$/) { unshift( @{ $self->{_key_stack} }, $characters_structure->{Data} ); }
         default 
         { 
             # Must be a value associated with a key. But...
             if ( $self->{_itunes_entity_stack}->[0] eq 'some_individual_playlist_item' )
             { # Maybe we're in a playlist item! In which case, append it.
                 die "Something weird happened in a playlist items array!" unless ($self->{_key_stack}->[0] eq 'Track ID');
-                # push( @{ $self->{_current_item}->{'Playlist Items'} }, $data);
+                # push( @{ $self->{_current_item}->{'Playlist Items'} }, $characters_structure->{Data} );
             } 
-            else { $self->{_current_item}->{ $self->{_key_stack}->[0] } = $data; } # Nope, as per normal.
+            else { $self->{_current_item}->{ $self->{_key_stack}->[0] } = $characters_structure->{Data}; } # Nope, as per normal.
         } 
     }
 }
