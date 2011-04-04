@@ -73,12 +73,6 @@ sub new {
             # playlists (which is an array of dicts)
             # some_playlist (which is a dict)
             # some_playlist_items (which is an array of one-item dicts)
-    # Toggles:
-    $self->{_inside_tracks_dict} = 0;
-    $self->{_inside_some_track} = 0;
-    $self->{_inside_playlists_array} = 0;
-    $self->{_inside_some_playlist} = 0;
-    $self->{_inside_playlist_items_array} = 0;
     # Scratchpads:
     $self->{_current_item} = {};
     # Final products:
@@ -225,28 +219,17 @@ sub exit_dict {
     my ($self) = @_;
     # Take it off the stack:
     my $erstwhile_structure = $self->{_data_structure_stack}->shift; 
-    if ($self->{_inside_tracks_dict} == 1)
+    given ($self->{_itunes_entity_stack}->[0])
+    
     {
-        # We're about to leave either a track or the tracks dict itself.
-        if ($erstwhile_structure->{name} eq 'Tracks') { $self->exit_tracks_dict; }
-        else { 
-            # We just left a track. Take note of that, write the track, and blitz the temporary variable.
-            $self->exit_some_track;
+        when (/tracks/) { $self->exit_tracks_dict; }
+        when (/some_track/) { $self->exit_some_track; }
+        when (/some_playlist$/) { $self->exit_some_playlist; }
+        when (/some_playlist_items/) {
+            # Oh hey, we just left one of those one-item dicts. Do nothing; either there's another one coming up, or we're about to exit the playlist items array.
         }
-    }
-    elsif ($self->{_inside_playlists_array} == 1)
-    {
-        # We're about to leave...something. The dicts we can potentially be leaving are an individual playlist, or one of the one-item track ID => #### dicts inside the Playlist Items array of some playlist.
-        if ($self->{_inside_playlist_items_array})
-        {
-            # We just left one of those one-item dicts in the playlist items array
-            # DO SOMETHING (todo)
-        }
-        else
-        {
-            # We just left some playlist completely, and will soon be moving on to the next playlist. 
-            $self->exit_some_playlist;
-        }
+        when (/plist/) {  } # Do nothing, we'll leave the plist in a sec. 
+        default { die "We just left an unknown dict of some kind (see the exit_dict method)"; }
     }
 
 }
@@ -255,17 +238,12 @@ sub exit_array {
     my ($self) = @_;
     # Take it off the stack:
     my $erstwhile_structure = $self->{_data_structure_stack}->shift; 
-    if ($erstwhile_structure->{name} eq 'Playlists')
+    given ($self->{_itunes_entity_stack}->[0])
     {
-        # Then we just left the whole playlists array.
-        $self->exit_playlists_array;
+        when (/playlists/) { $self->exit_playlists_array; }
+        when (/some_playlist_items/) { $self->exit_playlist_items_array; }
+        default { die "What? We just tried to exit an unknown array."; }
     }
-    elsif ($erstwhile_structure->{name} eq 'Playlist Items')
-    {
-        # Then we just left some playlist's playlist items array.
-        $self->exit_playlist_items_array;
-    }
-    else { die "Exited unknown array!"; }
 
 }
 
@@ -309,10 +287,10 @@ sub start_element {
         # Unfortunately, we have to split the logic of writing things to the $self->{_current_item} hash because of the way plists do booleans. 
         # Booleans are always the values to keys, i.e. they always happen inside a dict. Anonymous bools would be silly. 
         when (/true/) { 
-            $self->write_value( $self->{_key_stack}->[0], 1 ) if ($self->{_inside_some_track} or $self->{_inside_some_playlist});
+            $self->write_value( $self->{_key_stack}->[0], 1 ) if ($self->{_itunes_entity_stack}->[0] =~ /^some_(track|playlist)$/);
         }
         when (/false/) { # Which I don't think ever happens, btw.
-            $self->write_value( $self->{_key_stack}->[0], 0 ) if ($self->{_inside_some_track} or $self->{_inside_some_playlist});
+            $self->write_value( $self->{_key_stack}->[0], 0 ) if ($self->{_itunes_entity_stack}->[0] =~ /^some_(track|playlist)$/);
         }
         when (/plist/) {
             $self->enter_plist;
@@ -373,7 +351,6 @@ sub characters {
 
 sub end_document {
     my $self = shift;
-    print "DONE! Generating applescript...\n"; # goes with the print "." up above in write_track
     # The parser will bubble up the return value of end_document and return it as the result of the parse method.
     return { tracks => $self->{_tracks}, playlists => $self->{_playlists} };
 }
