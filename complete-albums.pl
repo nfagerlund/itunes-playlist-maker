@@ -212,7 +212,7 @@ sub characters {
             if ( $self->{_itunes_entity_stack}->[0] eq 'some_individual_playlist_item' )
             { # Maybe we're in a playlist item! In which case, append it.
                 die "Something weird happened in a playlist items array!" unless ($self->{_key_stack}->[0] eq 'Track ID');
-                push( @{ $self->{_current_item}->{'Playlist Items'} }, $data);
+                # push( @{ $self->{_current_item}->{'Playlist Items'} }, $data);
             } 
             else { $self->{_current_item}->{ $self->{_key_stack}->[0] } = $data; } # Nope, as per normal.
         } 
