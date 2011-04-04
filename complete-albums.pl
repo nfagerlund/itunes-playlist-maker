@@ -206,8 +206,8 @@ sub characters {
         default 
         { 
             # Must be a value associated with a key. But...
-            if ( $self->{_itunes_entity_stack}->[0] eq 'some_playlist_items' )
-            { # Maybe we're in a playlist items array! 
+            if ( $self->{_itunes_entity_stack}->[0] eq 'some_individual_playlist_item' )
+            { # Maybe we're in a playlist item! In which case, append it.
                 die "Something weird happened in a playlist items array!" unless ($self->{_key_stack}->[0] eq 'Track ID');
                 $self->{_current_item}->{'Playlist Items'}->push($data);
             } 
