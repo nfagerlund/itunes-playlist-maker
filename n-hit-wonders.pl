@@ -62,6 +62,7 @@ sub quote_for_applescript {
 # duplicate (every track of musicRef whose artist is "Hiroki Kikuta" and (album is "Seiken Densetsu 3" and (disc number is 1 or disc number is 2) or album is "Seiken Densetsu 2 - Original Sound Version" and (disc number is 1))) to destRef
 # There is a fantastically serendipitous shortcut here: it turns out iTunes understands disc number == 0 the same way that I do! So I don't need to special-case that shit! Fucking amazing. 
 my @artist_fragments = ();
+my @chunked_artist_fragments = ();
 
 # Here's the main loop where we compile the fragments to add each artist (and the compliations) to the playlist.
 # We build these from the inside out!
@@ -69,45 +70,19 @@ while (my ($artist, $total_tracks) = each %{$artists_hashref})
 {
     if ($total_tracks <= $tracks_per_artist)
     {
-        @artist_fragments->push(qq{\tduplicate (every track of musicRef whose artist is "} . quote_for_applescript($artist) . qq{") to destRef\r});
+        @artist_fragments->push(qq{artist is "} . quote_for_applescript($artist) . qq{"});
     }
 }
-# ARTIST: while (my ($artist, $albums) = each %{$albums_hashref})
-# {
-#     # Document these hash formats.
-#     # Update the progress bar whether or not we're actually adding this album. 
-#     "\tmy updateProgress($current_possible_complete_disc, $number_of_possible_complete_discs)\n"); # progress bar logic
-#     
-#     my @album_fragments = ();
-#     ALBUM: while (my ($album, $discs) = each %{$albums})
-#     {
-#         my @disc_fragments = ();
-#         DISC: while (my ($disc, $disc_attributes) = each %{$discs})
-#         {
-#             $current_possible_complete_disc++; # Progress bar logic
-#             next unless @{ $disc_attributes->{tracks_seen} } == $disc_attributes->{'Track Count'};
-#             next unless $disc_attributes->{'Total Time'}/60000 >= $length_threshold;
-#             for my $i (0..$disc_attributes->{tracks_seen}->last_index)
-#             {
-#                 next DISC unless $disc_attributes->{tracks_seen}->[$i];
-#             }
-#             # If it made it through all that, we have a complete disc of the appropriate length. This album may have more than one disc. 
-#             @disc_fragments->push("disc number is $disc");
-#         }
-#         if (@disc_fragments) # If this is empty, there aren't any complete discs for this album, and we're going back to ARTIST empty.
-#         {
-#             @album_fragments->push(
-#                 q{album is "} . quote_for_applescript($album) . q{" and (} . @disc_fragments->join(" or ") . ")"
-#             );
-#         }
-#     }
-#     my $artist_or_comp_statement = $artist eq 'Compilation' ? 'compilation is true' : q{artist is "} . quote_for_applescript($artist) . q{"};
-#     if (@album_fragments)
-#     {
-#         @artist_fragments->push( $artist_or_comp_statement and (" . @album_fragments->join(" or ") . ")) to destRef\n");
-#     }
-# }
+# say @artist_fragments->join("\n");
+
+while (@artist_fragments->length > 20) {
+    my @temparray = splice(@artist_fragments, 0, 20);
+    @chunked_artist_fragments->push(qq{\tduplicate (every track of musicRef whose } . @temparray->join(' or ') . qq{) to destRef\n});
     
+}
+@chunked_artist_fragments->push(qq{\tduplicate (every track of musicRef whose } . @artist_fragments->join(' or ') . qq{) to destRef\n}) if defined($artist_fragments[0]);
+# say @chunked_artist_fragments->join('');
+
 # This will be a string in an AppleScript. Clean it.
 $destination_playlist = quote_for_applescript($destination_playlist);
 
@@ -128,7 +103,7 @@ EOF
 # * We delete the whole playlist, then re-build it. Only way to handle cases where someone deleted half an album between runs. 
 
 # splice in the fragments!
-$applescript_string .= @artist_fragments->join(''); # For some reason, autobox::Core likes to throw an error if you don't give join an argument. 
+$applescript_string .= @chunked_artist_fragments->join(''); # For some reason, autobox::Core likes to throw an error if you don't give join an argument. 
 
 # Finish the applescript: end the main tell and write to the progress bar one last time. 
 $applescript_string .= <<EOF;
@@ -374,8 +349,8 @@ sub exit_array {
 sub write_track {
     my ($self, $track) = @_;
     # Bring the destination counter to life if necessary.
-    $self->{_artists}->{$track->{Artist}} //= 0; #/# nonsense comment for bbedit
-    $self->{_artists}->{$track->{Artist}} ++;
+    $self->{_artists}->{ lc($track->{Artist}) } //= 0; #/# nonsense comment for bbedit
+    $self->{_artists}->{ lc($track->{Artist}) } ++;
     # And... that should be it. 
     print "."; # just for good measure
 }
